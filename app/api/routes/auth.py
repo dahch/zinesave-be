@@ -61,7 +61,22 @@ def resolve_user(db: Session, google_info: dict) -> User:
     db.commit()
     return user
 
-CLIENT_SECRETS_FILE = "client_secret.json"
+def get_google_client_config():
+    return {
+        "web": {
+            "client_id": os.getenv("GOOGLE_CLIENT_ID"),
+            "project_id": os.getenv("GOOGLE_PROJECT_ID"),
+            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+            "token_uri": "https://oauth2.googleapis.com/token",
+            "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+            "client_secret": os.getenv("GOOGLE_CLIENT_SECRET"),
+            "redirect_uris": [
+                os.getenv("BACKEND_URL") + "/auth/google/callback",
+                "http://localhost:8000/auth/google/callback"
+            ]
+        }
+    }
+
 SCOPES = [
     "https://www.googleapis.com/auth/drive.file",
     "openid",
@@ -71,10 +86,11 @@ SCOPES = [
 
 @router.get("/google")
 def google_login():
-    flow = Flow.from_client_secrets_file(
-        CLIENT_SECRETS_FILE,
+    flow = Flow.from_client_config(
+        get_google_client_config(),
         scopes=SCOPES,
-        redirect_uri="http://localhost:8000/auth/google/callback"
+        # Use env var for redirect uri
+        redirect_uri=os.getenv("BACKEND_URL") + "/auth/google/callback"
     )
 
     auth_url, _ = flow.authorization_url(
@@ -86,8 +102,8 @@ def google_login():
 
 @router.get("/google/authorize")
 def google_authorize(user: User = Depends(get_current_user)):
-    flow = Flow.from_client_secrets_file(
-        CLIENT_SECRETS_FILE,
+    flow = Flow.from_client_config(
+        get_google_client_config(),
         scopes=SCOPES,
         redirect_uri="http://localhost:8000/auth/google/callback"
     )
@@ -115,8 +131,8 @@ def google_callback(request: Request, db: Session = Depends(get_db)):
         except Exception:
             existing_user = None
 
-    flow = Flow.from_client_secrets_file(
-        CLIENT_SECRETS_FILE,
+    flow = Flow.from_client_config(
+        get_google_client_config(),
         scopes=SCOPES,
         redirect_uri="http://localhost:8000/auth/google/callback",
         state=state 
