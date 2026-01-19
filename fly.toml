@@ -1,12 +1,11 @@
-# fly.toml app configuration file generated for zinesave-be on 2026-01-19T14:46:09Z
-#
-# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
-#
-
 app = 'zinesave-be'
 primary_region = 'ams'
 
 [build]
+
+[processes]
+  app = "uvicorn app.main:app --host 0.0.0.0 --port 8080"
+  worker = "arq app.worker.WorkerSettings"
 
 [http_service]
   internal_port = 8080
@@ -14,7 +13,7 @@ primary_region = 'ams'
   auto_stop_machines = 'stop'
   auto_start_machines = true
   min_machines_running = 0
-  processes = ['app']
+  processes = ["app"]
 
 [[vm]]
   memory = '1gb'
