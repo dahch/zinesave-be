@@ -37,7 +37,12 @@ app = FastAPI(title="Reader -> ePub", description="API for converting reader to 
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:3000",
+        "https://zinesave-fe-l64v.vercel.app",
+        "https://zinesave-fe.vercel.app"
+    ],
+    allow_origin_regex=r"https://zinesave-fe.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
