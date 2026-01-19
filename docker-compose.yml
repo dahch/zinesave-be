@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+
+  worker:
+    build: .
+    command: arq app.worker.WorkerSettings
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=redis://redis:6379
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - JWT_SECRET=${JWT_SECRET}
+      - DROPBOX_CLIENT_ID=${DROPBOX_CLIENT_ID}
+      - DROPBOX_CLIENT_SECRET=${DROPBOX_CLIENT_SECRET}
+      - ONEDRIVE_CLIENT_ID=${ONEDRIVE_CLIENT_ID}
+      - ONEDRIVE_CLIENT_SECRET=${ONEDRIVE_CLIENT_SECRET}
+    depends_on:
+      - redis
+    volumes:
+      - .:/app
