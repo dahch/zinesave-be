@@ -105,7 +105,7 @@ def google_authorize(user: User = Depends(get_current_user)):
     flow = Flow.from_client_config(
         get_google_client_config(),
         scopes=SCOPES,
-        redirect_uri="http://localhost:8000/auth/google/callback"
+        redirect_uri=os.getenv("BACKEND_URL") + "/auth/google/callback"
     )
 
     state = create_access_token(user)
@@ -134,7 +134,7 @@ def google_callback(request: Request, db: Session = Depends(get_db)):
     flow = Flow.from_client_config(
         get_google_client_config(),
         scopes=SCOPES,
-        redirect_uri="http://localhost:8000/auth/google/callback",
+        redirect_uri=os.getenv("BACKEND_URL") + "/auth/google/callback",
         state=state 
     )
 
@@ -250,7 +250,7 @@ def login(data: Login, db: Session = Depends(get_db)):
 @router.get("/dropbox/authorize")
 def dropbox_authorize(user: User = Depends(get_current_user)):
     client_id = os.getenv("DROPBOX_CLIENT_ID")
-    redirect_uri = "http://localhost:8000/auth/dropbox/callback"
+    redirect_uri = os.getenv("BACKEND_URL") + "/auth/dropbox/callback"
     
     # Create short-lived token for state
     state = create_access_token(user)
@@ -265,7 +265,7 @@ def dropbox_callback(code: str, state: str, db: Session = Depends(get_db)):
 
     client_id = os.getenv("DROPBOX_CLIENT_ID")
     client_secret = os.getenv("DROPBOX_CLIENT_SECRET")
-    redirect_uri = "http://localhost:8000/auth/dropbox/callback"
+    redirect_uri = os.getenv("BACKEND_URL") + "/auth/dropbox/callback"
     
     # Exchange code for token
     token_url = "https://api.dropboxapi.com/oauth2/token"
