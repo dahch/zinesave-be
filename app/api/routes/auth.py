@@ -138,10 +138,12 @@ def google_callback(request: Request, db: Session = Depends(get_db)):
         state=state 
     )
 
-    flow.fetch_token(authorization_response=str(request.url))
+    print(f"DEBUG: redirect_uri used in flow: {os.getenv('BACKEND_URL')}/auth/google/callback")
+    print(f"DEBUG: request.url: {request.url}")
+    
+    code = request.query_params.get("code")
+    flow.fetch_token(code=code)
     creds = flow.credentials
-
-    # print(os.getenv("GOOGLE_CLIENT_ID"))
     transport = requests.Request()
     idinfo = id_token.verify_oauth2_token(
         creds.id_token,

@@ -19,11 +19,11 @@ class RetentionService:
         """
         Deletes files from storage and marks them as deleted in DB if:
         - User is on 'free' plan
-        - Job was created > 6 months ago
+        - Job was created > 7 days ago
         - File is not already deleted
         """
         try:
-            six_months_ago = datetime.now(timezone.utc) - timedelta(days=30 * 6)
+            seven_days_ago = datetime.now(timezone.utc) - timedelta(days=7)
             
             # Query for files that need to be deleted
             # Join Job to check created_at
@@ -34,7 +34,7 @@ class RetentionService:
                 .join(User, Job.user_id == User.id)
                 .filter(
                     User.plan == "free",
-                    Job.created_at < six_months_ago,
+                    Job.created_at < seven_days_ago,
                     File.is_deleted == False
                 )
                 .all()

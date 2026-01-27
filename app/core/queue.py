@@ -23,7 +23,7 @@ if REDIS_URL:
 else:
     # For simplicity, if running in docker-compose, hostname is "redis"
     redis_settings = RedisSettings(
-        host=os.getenv("REDIS_HOST", "redis"),
+        host=os.getenv("REDIS_HOST", "localhost"),
         port=int(os.getenv("REDIS_PORT", 6379)),
     )
 
