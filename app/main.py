@@ -40,7 +40,9 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:3000",
         "https://zinesave-fe-l64v.vercel.app",
-        "https://zinesave-fe.vercel.app"
+        "https://zinesave-fe.vercel.app",
+        "https://zanesave.io",
+        "https://www.zanesave.io",
     ],
     allow_origin_regex=r"https://zinesave-fe.*\.vercel\.app",
     allow_credentials=True,
