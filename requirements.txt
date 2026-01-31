@@ -58,3 +58,5 @@ uvicorn==0.40.0
 psycopg2-binary
 boto3
 sentry-sdk
+mailersend
+

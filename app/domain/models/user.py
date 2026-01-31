@@ -23,6 +23,7 @@ class User(Base):
     country = Column(String, nullable=True)
     vat_number = Column(String, nullable=True)
 
+    is_verified = Column(Boolean, default=False)
     is_active = Column(Boolean, default=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())

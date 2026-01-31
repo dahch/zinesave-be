@@ -18,6 +18,7 @@ from app.api.dependencies.auth import get_current_user
 from app.api.dependencies.auth import get_user_from_token
 from app.domain.models.cloud_connection import CloudConnection
 import requests as requests_lib
+from app.services.email_service import EmailService
 
 os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
 router = APIRouter(prefix="/auth", tags=["Auth"])
@@ -55,7 +56,8 @@ def resolve_user(db: Session, google_info: dict) -> User:
         name=google_info.get("name"),
         provider="google",
         provider_id=google_info["sub"],
-        plan="free"
+        plan="free",
+        is_verified=True
     )
     db.add(user)
     db.commit()
@@ -214,17 +216,29 @@ def register(data: Register, db: Session = Depends(get_db)):
         plan="free",
         is_company=data.is_company,
         country=data.country,
-        vat_number=data.vat_number
+        vat_number=data.vat_number,
+        is_verified=False
     )
 
     db.add(user)
     db.commit()
+    db.refresh(user)
 
+    # Send verification email
     token = create_access_token(user)
-
+    # Assuming frontend has a route /verify-email to catch the token and call the backend verify endpoint
+    # OR backend verify link directly. Let's make the link point to backend verify endpoint or frontend?
+    # Usually frontend handles the "Processing..." state.
+    # Front: /verify?token=XYZ -> API: POST /auth/verify {token}
+    
+    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+    verification_link = f"{frontend_url}/verify?token={token}"
+    
+    email_service = EmailService()
+    response = email_service.send_verification_email(user.email, verification_link)
+    print(f"Email response: {response}")
     return {
-        "access_token": token,
-        "token_type": "bearer"
+        "message": "Registration successful. Please check your email to verify your account."
     }
 
 @router.post("/login")
@@ -241,12 +255,62 @@ def login(data: Login, db: Session = Depends(get_db)):
     if not user or not verify_password(data.password, user.password_hash):
         raise HTTPException(401, "Invalid credentials")
 
+    if not user.is_verified:
+        raise HTTPException(403, "Email not verified")
+
     token = create_access_token(user)
 
     return {
         "access_token": token,
         "token_type": "bearer"
     }
+
+@router.post("/verify")
+def verify_email(token: str, db: Session = Depends(get_db)):
+    try:
+        user = get_user_from_token(token, db)
+    except Exception:
+        raise HTTPException(400, "Invalid or expired token")
+
+    if not user:
+        raise HTTPException(400, "User not found")
+
+    if user.is_verified:
+        return {"message": "Email already verified"}
+
+    user.is_verified = True
+    db.commit()
+
+    # Log user in immediately? Or just return success.
+    # Let's return a fresh token so they are logged in on frontend
+    new_token = create_access_token(user)
+    
+    return {
+        "message": "Email verified successfully",
+        "access_token": new_token,
+        "token_type": "bearer"
+    }
+
+@router.post("/resend-verification")
+def resend_verification(email: str, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == email).first()
+    
+    if not user:
+        # Don't reveal if user exists
+        return {"message": "If the email is registered, a verification link has been sent."}
+
+    if user.is_verified:
+         return {"message": "Email already verified"}
+
+    token = create_access_token(user)
+    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+    verification_link = f"{frontend_url}/verify?token={token}"
+    
+    email_service = EmailService()
+    email_service.send_verification_email(user.email, verification_link)
+
+    return {"message": "Verification email resent"}
+
 
 # --- DROPBOX AUTH ---
 @router.get("/dropbox/authorize")
