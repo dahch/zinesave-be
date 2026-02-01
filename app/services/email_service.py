@@ -2,7 +2,7 @@ import os
 from mailersend import MailerSendClient
 from mailersend import EmailRequest, EmailContact
 
-from app.services.email_templates import create_verification_email
+from app.services.email_templates import create_verification_email, create_reset_password_email
 
 class EmailService:
     def __init__(self):
@@ -27,6 +27,25 @@ class EmailService:
                 from_email=EmailContact(email=self.from_email, name="ZineSave"),
                 to=[EmailContact(email=to_email)],
                 subject="Verify your email for ZineSave",
+                html=email_body,
+                text=text_body
+            )
+            
+            response = self.client.emails.send(req)
+            return response
+        except Exception as e:
+            print(f"Error sending email: {e}")
+            return None
+
+    def send_password_reset_email(self, to_email: str, reset_link: str):
+        email_body = create_reset_password_email(reset_link, self.frontend_url)
+        text_body = f"Reset your password by copying this link: {reset_link}"
+
+        try:
+            req = EmailRequest(
+                from_email=EmailContact(email=self.from_email, name="ZineSave"),
+                to=[EmailContact(email=to_email)],
+                subject="Reset your password for ZineSave",
                 html=email_body,
                 text=text_body
             )

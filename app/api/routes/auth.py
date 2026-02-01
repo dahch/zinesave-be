@@ -8,12 +8,14 @@ from fastapi.exceptions import HTTPException
 from fastapi import APIRouter, Request, Depends
 from fastapi.responses import RedirectResponse
 
-from app.domain.schemas.auth import Register, Login
+from app.domain.schemas.auth import Register, Login, ForgotPassword, ResetPassword
+
 from app.domain.models.user import User
 
 from app.api.dependencies.database import get_db
-from app.core.security import create_access_token
+from app.core.security import create_access_token, create_reset_token, verify_reset_token
 from app.core.password import hash_password, verify_password
+
 from app.api.dependencies.auth import get_current_user
 from app.api.dependencies.auth import get_user_from_token
 from app.domain.models.cloud_connection import CloudConnection
@@ -310,6 +312,39 @@ def resend_verification(email: str, db: Session = Depends(get_db)):
     email_service.send_verification_email(user.email, verification_link)
 
     return {"message": "Verification email resent"}
+
+
+@router.post("/forgot-password")
+def forgot_password(data: ForgotPassword, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == data.email).first()
+    
+    # We always return success to prevent email enumeration
+    if not user or user.provider != "email":
+        return {"message": "If the email is registered, a password reset link has been sent."}
+    
+    token = create_reset_token(user.email)
+    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+    reset_link = f"{frontend_url}/reset-password?token={token}"
+    
+    email_service = EmailService()
+    email_service.send_password_reset_email(user.email, reset_link)
+    
+    return {"message": "If the email is registered, a password reset link has been sent."}
+
+@router.post("/reset-password")
+def reset_password(data: ResetPassword, db: Session = Depends(get_db)):
+    email = verify_reset_token(data.token)
+    if not email:
+        raise HTTPException(400, "Invalid or expired token")
+        
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        raise HTTPException(400, "User not found")
+        
+    user.password_hash = hash_password(data.new_password)
+    db.commit()
+    
+    return {"message": "Password updated successfully"}
 
 
 # --- DROPBOX AUTH ---
