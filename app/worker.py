@@ -31,6 +31,7 @@ async def execute_pipeline(ctx, job_id: str):
 class WorkerSettings:
     functions = [execute_pipeline]
     redis_settings = redis_settings
+    poll_delay = 5
     
     async def on_startup(self):
         logging.getLogger(__name__).info("Worker started")
