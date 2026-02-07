@@ -407,7 +407,8 @@ def dropbox_callback(code: str, state: str, db: Session = Depends(get_db)):
 @router.get("/onedrive/authorize")
 def onedrive_authorize(user: User = Depends(get_current_user)):
     client_id = os.getenv("ONEDRIVE_CLIENT_ID")
-    redirect_uri = "http://localhost:8000/auth/onedrive/callback"
+    client_secret = os.getenv("ONEDRIVE_CLIENT_SECRET")
+    redirect_uri = os.getenv("BACKEND_URL") + "/auth/onedrive/callback"
     scope = "Files.ReadWrite User.Read offline_access"
     
     # State with user token
@@ -427,7 +428,7 @@ def onedrive_callback(code: str, state: str, db: Session = Depends(get_db)):
 
     client_id = os.getenv("ONEDRIVE_CLIENT_ID")
     client_secret = os.getenv("ONEDRIVE_CLIENT_SECRET")
-    redirect_uri = "http://localhost:8000/auth/onedrive/callback"
+    redirect_uri = os.getenv("BACKEND_URL") + "/auth/onedrive/callback"
     
     token_url = "https://login.microsoftonline.com/common/oauth2/v2.0/token"
     data = {
