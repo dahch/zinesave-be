@@ -23,6 +23,7 @@ import requests as requests_lib
 from app.services.email_service import EmailService
 
 os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
+os.environ['OAUTHLIB_RELAX_TOKEN_SCOPE'] = '1'
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
 def resolve_user(db: Session, google_info: dict) -> User:
@@ -146,7 +147,7 @@ def google_callback(request: Request, db: Session = Depends(get_db)):
     print(f"DEBUG: request.url: {request.url}")
     
     code = request.query_params.get("code")
-    flow.fetch_token(code=code)
+    token_response = flow.fetch_token(code=code)
     creds = flow.credentials
     transport = requests.Request()
     idinfo = id_token.verify_oauth2_token(
@@ -167,32 +168,38 @@ def google_callback(request: Request, db: Session = Depends(get_db)):
         target_user = resolve_user(db, idinfo)
         is_binding = False
 
-    # Update Cloud Connection
-    # Check if connection exists
-    connection = (
-        db.query(CloudConnection)
-        .filter(
-            CloudConnection.user_id == target_user.id,
-            CloudConnection.provider == "google_drive"
+    # Check if 'https://www.googleapis.com/auth/drive.file' is in the granted scopes.
+    # The scope string in token_response is usually space-separated.
+    granted_scopes = token_response.get("scope", "")
+    drive_scope = "https://www.googleapis.com/auth/drive.file"
+
+    if drive_scope in granted_scopes:
+        # Update Cloud Connection
+        # Check if connection exists
+        connection = (
+            db.query(CloudConnection)
+            .filter(
+                CloudConnection.user_id == target_user.id,
+                CloudConnection.provider == "google_drive"
+            )
+            .first()
         )
-        .first()
-    )
 
-    if not connection:
-        connection = CloudConnection(
-            user_id=target_user.id,
-            provider="google_drive"
-        )
-        db.add(connection)
-    
-    connection.access_token = creds.token
-    connection.refresh_token = creds.refresh_token
-    if creds.expiry:
-        connection.expires_at = creds.expiry
+        if not connection:
+            connection = CloudConnection(
+                user_id=target_user.id,
+                provider="google_drive"
+            )
+            db.add(connection)
+        
+        connection.access_token = creds.token
+        connection.refresh_token = creds.refresh_token
+        if creds.expiry:
+            connection.expires_at = creds.expiry
 
-    connection.metadata_info = {"email": idinfo.get("email")}
+        connection.metadata_info = {"email": idinfo.get("email")}
 
-    db.commit()
+        db.commit()
 
     frontend_url = os.getenv("FRONTEND_URL")
 
@@ -407,7 +414,6 @@ def dropbox_callback(code: str, state: str, db: Session = Depends(get_db)):
 @router.get("/onedrive/authorize")
 def onedrive_authorize(user: User = Depends(get_current_user)):
     client_id = os.getenv("ONEDRIVE_CLIENT_ID")
-    client_secret = os.getenv("ONEDRIVE_CLIENT_SECRET")
     redirect_uri = os.getenv("BACKEND_URL") + "/auth/onedrive/callback"
     scope = "Files.ReadWrite User.Read offline_access"
     
