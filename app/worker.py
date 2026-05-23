@@ -4,6 +4,7 @@ import logging
 import sentry_sdk
 from sentry_sdk.integrations.logging import LoggingIntegration
 from arq import create_pool
+from arq.cron import cron
 from app.core.database import SessionLocal
 from app.services.pipeline_service import run_pipeline
 from app.core.queue import redis_settings
@@ -44,7 +45,7 @@ class WorkerSettings:
     functions = [execute_pipeline]
     cron_jobs = [
         # Run retention cleanup daily at 03:00 UTC
-        {"coroutine": run_retention_cleanup, "hour": 3, "minute": 0},
+        cron(run_retention_cleanup, hour=3, minute=0),
     ]
     redis_settings = redis_settings
     # Increased from 5 to 30 to stay within Upstash free tier (500K commands/month).
