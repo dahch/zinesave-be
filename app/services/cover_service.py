@@ -1,7 +1,7 @@
 import os
 import io
 import textwrap
-from datetime import datetime
+from datetime import datetime, timezone
 from urllib.parse import urlparse
 from PIL import Image, ImageDraw, ImageFont
 
@@ -95,7 +95,7 @@ def generate_cover(title: str, url: str, job_id: str):
     ], 40)
 
     domain = urlparse(url).netloc.upper() # Domain names in capital letters look better.
-    date = datetime.utcnow().strftime("%B %d, %Y").upper()
+    date = datetime.now(timezone.utc).strftime("%B %d, %Y").upper()
 
     # 2. Draw Frame/Border (Visual Style)
     draw.rectangle(

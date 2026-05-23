@@ -14,3 +14,10 @@ class JobResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+class JobListResponse(BaseModel):
+    jobs: list[JobResponse]
+    total: int
+    page: int
+    per_page: int
+    pages: int

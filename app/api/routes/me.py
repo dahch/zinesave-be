@@ -1,4 +1,4 @@
-from app.services.plan_service import count_jobs
+from app.services.plan_service import count_active_jobs
 from app.core.plans import PLANS
 from fastapi import APIRouter, Depends
 from app.api.dependencies.auth import get_current_user
@@ -53,7 +53,7 @@ def get_usage(
     db: Session = Depends(get_db)
 ):
     plan = PLANS[user.plan]
-    used = count_jobs(db, user.id)
+    used = count_active_jobs(db, user.id)
     limit = plan["jobs_limit"]
     return {
         "plan": user.plan,

@@ -1,7 +1,10 @@
 import os
+import logging
 import boto3
 from botocore.exceptions import ClientError
 from botocore.config import Config
+
+logger = logging.getLogger(__name__)
 
 class StorageService:
     def __init__(self):
@@ -25,7 +28,7 @@ class StorageService:
             )
             return key
         except ClientError as e:
-            print(f"Failed to upload file to B2: {e}")
+            logger.error(f"Failed to upload file to B2: {e}")
             raise e
 
     def generate_presigned_url(self, key: str, expiration=3600):
@@ -38,7 +41,7 @@ class StorageService:
             )
             return response
         except ClientError as e:
-            print(f"Failed to generate presigned URL: {e}")
+            logger.error(f"Failed to generate presigned URL: {e}")
             return None
 
     def download_file(self, key: str, destination_path: str):
@@ -46,7 +49,7 @@ class StorageService:
         try:
             self.s3_client.download_file(self.bucket, key, destination_path)
         except ClientError as e:
-            print(f"Failed to download file from B2: {e}")
+            logger.error(f"Failed to download file from B2: {e}")
             raise e
 
     def delete_file(self, key: str):
@@ -54,7 +57,7 @@ class StorageService:
         try:
             self.s3_client.delete_object(Bucket=self.bucket, Key=key)
         except ClientError as e:
-            print(f"Failed to delete file from B2: {e}")
+            logger.error(f"Failed to delete file from B2: {e}")
             raise e
 
 storage_service = StorageService()

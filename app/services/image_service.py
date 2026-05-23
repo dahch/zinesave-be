@@ -1,5 +1,5 @@
-import os
 import uuid
+import logging
 import requests
 from PIL import Image
 import io
@@ -7,8 +7,7 @@ from bs4 import BeautifulSoup
 from app.services.url_utils import resolve_url
 from ebooklib import epub
 
-# IMAGES_DIR = "outputs/images"
-# os.makedirs(IMAGES_DIR, exist_ok=True)
+logger = logging.getLogger(__name__)
 
 def process_images(html: str, base_url: str):
     soup = BeautifulSoup(html, "html.parser")
@@ -17,7 +16,7 @@ def process_images(html: str, base_url: str):
     for img in soup.find_all("img"):
         src = img.get("src")
         resolved = resolve_url(src, base_url)
-        print(f"Processing image: {resolved}")
+        logger.debug(f"Processing image: {resolved}")
         
         #Data URI
         if resolved and resolved.startswith("data:image"):
@@ -66,17 +65,13 @@ def process_images(html: str, base_url: str):
                     optimized_content = output_buffer.getvalue()
 
             except Exception as img_err:
-                print(f"Image optimization failed for {resolved}, using original: {img_err}")
+                logger.warning(f"Image optimization failed for {resolved}, using original: {img_err}")
                 optimized_content = image_data
                 content_type = response.headers.get("Content-Type", "")
                 ext = content_type.split("/")[-1].split(";")[0] or "png"
                 mime_type = content_type
 
             filename = f"{uuid.uuid4()}.{ext}"
-            # path = os.path.join(IMAGES_DIR, filename)
-
-            # with open(path, "wb") as f:
-            #     f.write(response.content)
 
             epub_image = epub.EpubImage()
             epub_image.file_name = f"images/{filename}"
@@ -90,7 +85,7 @@ def process_images(html: str, base_url: str):
             img["src"] = epub_image.file_name
 
         except Exception as e:
-            print(f"Error handling image {resolved}: {str(e)}")
+            logger.warning(f"Error handling image {resolved}: {str(e)}")
             # Fail silently: quality > crash
             img.decompose()
     

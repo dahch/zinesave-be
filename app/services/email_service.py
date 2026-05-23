@@ -1,8 +1,11 @@
 import os
+import logging
 from mailersend import MailerSendClient
 from mailersend import EmailRequest, EmailContact
 
 from app.services.email_templates import create_verification_email, create_reset_password_email
+
+logger = logging.getLogger(__name__)
 
 class EmailService:
     def __init__(self):
@@ -11,8 +14,7 @@ class EmailService:
         self.frontend_url = os.getenv("FRONTEND_URL", "https://zinesave.io")
         
         if not self.api_key:
-            print("Warning: MAILERSEND_API_KEY not set")
-            # We might want to handle this gracefully or fail hard depending on requirements
+            logger.warning("MAILERSEND_API_KEY not set — email sending will fail")
             
         self.client = MailerSendClient(api_key=self.api_key)
 
@@ -34,7 +36,7 @@ class EmailService:
             response = self.client.emails.send(req)
             return response
         except Exception as e:
-            print(f"Error sending email: {e}")
+            logger.error(f"Error sending verification email to {to_email}: {e}")
             return None
 
     def send_password_reset_email(self, to_email: str, reset_link: str):
@@ -53,5 +55,5 @@ class EmailService:
             response = self.client.emails.send(req)
             return response
         except Exception as e:
-            print(f"Error sending email: {e}")
+            logger.error(f"Error sending password reset email to {to_email}: {e}")
             return None

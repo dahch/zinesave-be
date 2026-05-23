@@ -1,6 +1,6 @@
 from bs4 import BeautifulSoup
 from urllib.parse import urlparse
-from datetime import datetime
+from datetime import datetime, timezone
 
 def extract_metadata(html: str, url: str) -> dict:
     soup = BeautifulSoup(html, "html.parser")
@@ -45,7 +45,7 @@ def extract_metadata(html: str, url: str) -> dict:
         or meta(prop="og:published_time")
         or meta(name="date")
         or meta(name="publish-date")
-        or datetime.utcnow().isoformat()
+        or datetime.now(timezone.utc).isoformat()
     )
 
     return {

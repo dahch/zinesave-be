@@ -1,8 +1,15 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import jwt
 import os
 
-JWT_SECRET = os.getenv("JWT_SECRET", "dev-secret")
+JWT_SECRET = os.getenv("JWT_SECRET")
+if not JWT_SECRET:
+    raise RuntimeError(
+        "JWT_SECRET environment variable is not set. "
+        "This is required for authentication security. "
+        "Set it to a strong random string in your .env file."
+    )
+
 JWT_EXP_MINUTES = 60
 
 def create_access_token(user):
@@ -10,7 +17,7 @@ def create_access_token(user):
         "sub": user.id,
         "email": user.email,
         "plan":  user.plan,
-        "exp": datetime.utcnow() + timedelta(minutes=JWT_EXP_MINUTES)
+        "exp": datetime.now(timezone.utc) + timedelta(minutes=JWT_EXP_MINUTES)
     }
     return jwt.encode(payload, JWT_SECRET, algorithm="HS256")
 
@@ -20,7 +27,7 @@ def create_reset_token(email: str) -> str:
     payload = {
         "sub": email,
         "type": "reset",
-        "exp": datetime.utcnow() + timedelta(minutes=RESET_TOKEN_EXP_MINUTES)
+        "exp": datetime.now(timezone.utc) + timedelta(minutes=RESET_TOKEN_EXP_MINUTES)
     }
     return jwt.encode(payload, JWT_SECRET, algorithm="HS256")
 

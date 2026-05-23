@@ -6,8 +6,11 @@ engine = create_engine(
     DATABASE_URL,
     pool_pre_ping=True,
     pool_recycle=1800,
-    pool_size=10,
-    max_overflow=20
+    # NeonDB free tier allows ~5 concurrent connections.
+    # Keep pool small to avoid connection limit errors,
+    # especially since the worker also opens sessions.
+    pool_size=2,
+    max_overflow=3
 )
 
 SessionLocal = sessionmaker(
@@ -17,4 +20,3 @@ SessionLocal = sessionmaker(
 )
 
 Base = declarative_base()
-

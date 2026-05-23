@@ -1,4 +1,7 @@
 import os
+import logging
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from sqlalchemy.orm import Session
 from google.oauth2 import id_token
@@ -22,7 +25,12 @@ from app.domain.models.cloud_connection import CloudConnection
 import requests as requests_lib
 from app.services.email_service import EmailService
 
-os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
+logger = logging.getLogger(__name__)
+
+# Only disable HTTPS requirement in development
+if os.getenv("ENVIRONMENT", "production") != "production":
+    os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
+
 os.environ['OAUTHLIB_RELAX_TOKEN_SCOPE'] = '1'
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
@@ -143,8 +151,8 @@ def google_callback(request: Request, db: Session = Depends(get_db)):
         state=state 
     )
 
-    print(f"DEBUG: redirect_uri used in flow: {os.getenv('BACKEND_URL')}/auth/google/callback")
-    print(f"DEBUG: request.url: {request.url}")
+    logger.debug(f"redirect_uri used in flow: {os.getenv('BACKEND_URL')}/auth/google/callback")
+    logger.debug(f"request.url: {request.url}")
     
     code = request.query_params.get("code")
     token_response = flow.fetch_token(code=code)
@@ -211,8 +219,11 @@ def google_callback(request: Request, db: Session = Depends(get_db)):
         token = create_access_token(target_user)
         return RedirectResponse(url=f"{frontend_url}/auth/callback?token={token}")
 
+limiter = Limiter(key_func=get_remote_address)
+
 @router.post("/register")
-def register(data: Register, db: Session = Depends(get_db)):
+@limiter.limit("5/minute")
+def register(request: Request, data: Register, db: Session = Depends(get_db)):
     if db.query(User).filter(User.email == data.email).first():
         raise HTTPException(400, "Email already exists")
 
@@ -235,23 +246,20 @@ def register(data: Register, db: Session = Depends(get_db)):
 
     # Send verification email
     token = create_access_token(user)
-    # Assuming frontend has a route /verify-email to catch the token and call the backend verify endpoint
-    # OR backend verify link directly. Let's make the link point to backend verify endpoint or frontend?
-    # Usually frontend handles the "Processing..." state.
-    # Front: /verify?token=XYZ -> API: POST /auth/verify {token}
     
     frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
     verification_link = f"{frontend_url}/verify?token={token}"
     
     email_service = EmailService()
     response = email_service.send_verification_email(user.email, verification_link)
-    print(f"Email response: {response}")
+    logger.info(f"Verification email sent to {user.email}, response status: {response}")
     return {
         "message": "Registration successful. Please check your email to verify your account."
     }
 
 @router.post("/login")
-def login(data: Login, db: Session = Depends(get_db)):
+@limiter.limit("10/minute")
+def login(request: Request, data: Login, db: Session = Depends(get_db)):
     user = (
         db.query(User)
         .filter(
@@ -301,15 +309,19 @@ def verify_email(token: str, db: Session = Depends(get_db)):
     }
 
 @router.post("/resend-verification")
-def resend_verification(email: str, db: Session = Depends(get_db)):
+@limiter.limit("3/minute")
+def resend_verification(request: Request, email: str, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == email).first()
     
+    # Always return the same generic message to prevent user enumeration
+    generic_message = "If the email is registered and not yet verified, a verification link has been sent."
+
     if not user:
-        # Don't reveal if user exists
-        return {"message": "If the email is registered, a verification link has been sent."}
+        return {"message": generic_message}
 
     if user.is_verified:
-         return {"message": "Email already verified"}
+        # Don't reveal that the email is verified — use the same generic message
+        return {"message": generic_message}
 
     token = create_access_token(user)
     frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
@@ -318,11 +330,12 @@ def resend_verification(email: str, db: Session = Depends(get_db)):
     email_service = EmailService()
     email_service.send_verification_email(user.email, verification_link)
 
-    return {"message": "Verification email resent"}
+    return {"message": generic_message}
 
 
 @router.post("/forgot-password")
-def forgot_password(data: ForgotPassword, db: Session = Depends(get_db)):
+@limiter.limit("3/minute")
+def forgot_password(request: Request, data: ForgotPassword, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == data.email).first()
     
     # We always return success to prevent email enumeration

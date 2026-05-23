@@ -23,4 +23,5 @@ class Job(Base):
     finished_at = Column(DateTime, nullable=True)
 
     # Dictionary { "google_drive": {id, url}, "dropbox": ... }
-    external_uploads = Column(JSON, default={})
+    # Using lambda to avoid shared mutable default across instances
+    external_uploads = Column(JSON, default=lambda: {})
