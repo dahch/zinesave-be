@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
-from app.api.routes import jobs, auth, me, upload
+from app.api.routes import jobs, auth, me, upload, intentions
 from app.domain.models import job, job_content, file
 
 from contextlib import asynccontextmanager
@@ -57,6 +57,7 @@ app.include_router(jobs.router)
 app.include_router(auth.router)
 app.include_router(me.router)
 app.include_router(upload.router)
+app.include_router(intentions.router)
 
 @app.get("/")
 def healthcheck():

@@ -52,14 +52,10 @@ def get_usage(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    plan = PLANS[user.plan]
-    used = count_active_jobs(db, user.id)
-    limit = plan["jobs_limit"]
     return {
         "plan": user.plan,
-        "jobs_created": used,
-        "jobs_limit": limit,
-        "jobs_remaining": None if limit is None else max(limit - used, 0)
+        "credits": user.credits,
+        "is_beta_tester": user.is_beta_tester
     }
 
 @router.get("/dashboard")

@@ -11,6 +11,8 @@ class UserResponse(BaseModel):
     email: str
     name: str | None
     plan: str
+    credits: int
+    is_beta_tester: bool
     is_active: bool
     is_company: bool
     country: str | None

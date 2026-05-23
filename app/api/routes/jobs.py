@@ -19,23 +19,6 @@ from app.services.storage_service import storage_service
 limiter = Limiter(key_func=get_remote_address)
 router = APIRouter(prefix="/jobs", tags=["Jobs"])
 
-def enforce_plan_limits(db: Session, user: User):
-    plan = PLANS.get(user.plan)
-
-    if not plan:
-        raise HTTPException(403, "Invalid plan")
-
-    limit = plan["jobs_limit"]
-    if limit is None:
-        return
-    
-    used = count_active_jobs(db, user.id)
-
-    if used >= limit:
-        raise HTTPException(
-            status_code=403,
-            detail=f"Jobs limit reached: {used}/{limit}")
-
 
 @router.post("", response_model=JobResponse, status_code=202)
 @limiter.limit("10/minute")
@@ -45,7 +28,11 @@ async def create_job_endpoint(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user)
 ):
-    enforce_plan_limits(db, user)
+    if user.credits <= 0:
+        raise HTTPException(
+            status_code=403,
+            detail="INSUFFICIENT_CREDITS"
+        )
 
     # Duplicate detection: check if same URL was submitted in the last 10 minutes
     recent_cutoff = datetime.now(timezone.utc) - timedelta(minutes=10)
@@ -66,7 +53,10 @@ async def create_job_endpoint(
         )
 
     job = create_job(db, payload.url, user)
-
+    
+    # Deduct credit
+    user.credits -= 1
+    db.commit()
     # Enqueue in Redis
     # Function name must match what's defined in WorkerSettings.functions
     await request.app.state.redis.enqueue_job("execute_pipeline", job.id)

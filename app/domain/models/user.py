@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import Column, String, Boolean, DateTime
+from sqlalchemy import Column, String, Boolean, DateTime, Integer
 from sqlalchemy.sql import func
 from app.core.database import Base
 
@@ -17,6 +17,8 @@ class User(Base):
     provider_id = Column(String, nullable=False)    # Google sub
 
     plan = Column(String, default="free")
+    credits = Column(Integer, default=5)
+    is_beta_tester = Column(Boolean, default=True)
     
     # Profile info
     is_company = Column(Boolean, default=False)
