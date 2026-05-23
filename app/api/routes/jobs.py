@@ -147,4 +147,4 @@ def download_epub(
     if not presigned_url:
         raise HTTPException(500, "Failed to generate download link")
         
-    return RedirectResponse(url=presigned_url)
+    return {"download_url": presigned_url}
