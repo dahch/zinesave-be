@@ -1,8 +1,10 @@
 from datetime import datetime, timedelta, timezone
-import jwt
-import os
 
-JWT_SECRET = os.getenv("JWT_SECRET")
+import jwt
+
+from app.core.config import settings
+
+JWT_SECRET = settings.JWT_SECRET
 if not JWT_SECRET:
     raise RuntimeError(
         "JWT_SECRET environment variable is not set. "

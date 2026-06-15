@@ -1,12 +1,14 @@
 import json
+import logging
+
 import requests
+from bs4 import BeautifulSoup
 from readability import Document
 from sqlalchemy.orm import Session
+
 from app.domain.models.job import Job
 from app.domain.models.job_content import JobContent
 from app.services.metadata_service import extract_metadata
-from bs4 import BeautifulSoup
-import logging
 
 logger = logging.getLogger(__name__)
     

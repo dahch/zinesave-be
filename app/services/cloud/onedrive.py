@@ -1,8 +1,11 @@
-import os
 import logging
+import os
+from datetime import datetime, timedelta, timezone
+
 import requests
-from datetime import datetime, timezone, timedelta
 from sqlalchemy.orm import Session
+
+from app.core.config import settings
 from app.domain.models.cloud_connection import CloudConnection
 from app.services.cloud.adapter import CloudStorageAdapter, UploadResult
 
@@ -55,8 +58,8 @@ class OneDriveAdapter(CloudStorageAdapter):
         
         logger.info("Refreshing OneDrive access token")
         
-        client_id = os.getenv("ONEDRIVE_CLIENT_ID")
-        client_secret = os.getenv("ONEDRIVE_CLIENT_SECRET")
+        client_id = settings.ONEDRIVE_CLIENT_ID
+        client_secret = settings.ONEDRIVE_CLIENT_SECRET
         
         if not client_id or not client_secret:
             logger.error("ONEDRIVE_CLIENT_ID or ONEDRIVE_CLIENT_SECRET not set")
@@ -67,7 +70,7 @@ class OneDriveAdapter(CloudStorageAdapter):
             "client_id": client_id,
             "scope": "Files.ReadWrite User.Read offline_access",
             "refresh_token": connection.refresh_token,
-            "redirect_uri": os.getenv("BACKEND_URL") + "/auth/onedrive/callback",
+            "redirect_uri": settings.BACKEND_URL + "/auth/onedrive/callback",
             "grant_type": "refresh_token",
             "client_secret": client_secret,
         }

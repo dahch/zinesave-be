@@ -1,13 +1,16 @@
-from sqlalchemy.orm import Session
 from app.domain.models.cloud_connection import CloudConnection
+from app.domain.repositories.cloud_connection_repository import CloudConnectionRepository
 from app.services.cloud.adapter import CloudStorageAdapter
-from app.services.cloud.google_drive import GoogleDriveAdapter
 from app.services.cloud.dropbox import DropboxAdapter
+from app.services.cloud.google_drive import GoogleDriveAdapter
 from app.services.cloud.onedrive import OneDriveAdapter
 
+
 class CloudService:
-    @staticmethod
-    def get_adapter(provider: str) -> CloudStorageAdapter:
+    def __init__(self, cloud_conn_repo: CloudConnectionRepository):
+        self.cloud_conn_repo = cloud_conn_repo
+
+    def get_adapter(self, provider: str) -> CloudStorageAdapter:
         if provider == "google_drive":
             return GoogleDriveAdapter()
         elif provider == "dropbox":
@@ -17,20 +20,12 @@ class CloudService:
         else:
             raise ValueError(f"Unknown provider: {provider}")
 
-    @staticmethod
-    def upload_file(db: Session, user_id: str, provider: str, file_path: str):
-        adapter = CloudService.get_adapter(provider)
+    def upload_file(self, user_id: str, provider: str, file_path: str):
+        adapter = self.get_adapter(provider)
         
-        connection = (
-            db.query(CloudConnection)
-            .filter(
-                CloudConnection.user_id == user_id,
-                CloudConnection.provider == provider
-            )
-            .first()
-        )
+        connection = self.cloud_conn_repo.get_by_user_and_provider(user_id, provider)
 
         if not connection:
             raise ValueError(f"User is not connected to {provider}")
 
-        return adapter.upload_file(file_path, connection, db)
+        return adapter.upload_file(file_path, connection, self.cloud_conn_repo.db)

@@ -1,7 +1,7 @@
 import logging
 from datetime import datetime, timedelta, timezone
+
 from sqlalchemy.orm import Session
-from sqlalchemy import and_
 
 from app.core.database import SessionLocal
 from app.domain.models.file import File

@@ -17,18 +17,18 @@ LOGO_URL = "https://zinesave.io/icon.png"
 def get_base_styles():
     # We remove the block style for the most part and will inline everything.
     # However, we keep a small block for media queries which cannot be inlined.
-    return f"""
+    return """
     <style>
         /* Mobile styles */
-        @media screen and (max-width: 600px) {{
-            .content {{ padding: 24px !important; }}
-            .header {{ padding: 20px !important; }}
-            .logo-img {{ height: 28px !important; }}
-            .logo-text {{ font-size: 20px !important; }}
-            .button {{ padding: 12px 24px !important; width: 100% !important; box-sizing: border-box !important; text-align: center !important; }}
-            .main-table {{ width: 100% !important; }}
-            .wrapper {{ padding: 0 !important; }}
-        }}
+        @media screen and (max-width: 600px) {
+            .content { padding: 24px !important; }
+            .header { padding: 20px !important; }
+            .logo-img { height: 28px !important; }
+            .logo-text { font-size: 20px !important; }
+            .button { padding: 12px 24px !important; width: 100% !important; box-sizing: border-box !important; text-align: center !important; }
+            .main-table { width: 100% !important; }
+            .wrapper { padding: 0 !important; }
+        }
     </style>
     """
 
@@ -42,7 +42,7 @@ def create_verification_email(verification_link: str, frontend_url: str):
     style_body = f"margin: 0; padding: 0; width: 100%; background-color: {COLOR_BG_BODY}; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%;"
     style_wrapper = f"width: 100%; background-color: {COLOR_BG_BODY}; padding: 40px 0;"
     style_table = f"margin: 0 auto; max-width: 600px; width: 100%; background-color: {COLOR_BG_CARD}; border-radius: 8px; overflow: hidden; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;"
-    style_header = f"padding: 24px; text-align: center; background-color: #ffffff; border-bottom: 1px solid #f0f0f0;"
+    style_header = "padding: 24px; text-align: center; background-color: #ffffff; border-bottom: 1px solid #f0f0f0;"
     style_content = f"padding: 32px 24px; color: {COLOR_TEXT_MAIN}; line-height: 1.6; font-size: 16px; background-color: #ffffff;"
     style_footer = f"padding: 24px; text-align: center; font-size: 12px; color: {COLOR_TEXT_MUTED}; background-color: {COLOR_BG_BODY}; font-family: sans-serif;"
     style_button = f"display: inline-block; background-color: {COLOR_PRIMARY}; color: {COLOR_BUTTON_TEXT}; padding: 12px 32px; border-radius: 6px; text-decoration: none; font-weight: bold; font-size: 16px;"
@@ -51,7 +51,7 @@ def create_verification_email(verification_link: str, frontend_url: str):
     style_link = f"color: {COLOR_PRIMARY}; word-break: break-all;"
     style_footer_link = f"color: {COLOR_TEXT_MUTED}; text-decoration: underline; margin: 0 8px;"
     style_logo_text = f"font-size: 24px; font-weight: bold; color: {COLOR_TEXT_MAIN}; vertical-align: middle; font-family: sans-serif;"
-    style_logo_img = f"vertical-align: middle; height: 32px; width: auto; margin-right: 10px; border: 0;"
+    style_logo_img = "vertical-align: middle; height: 32px; width: auto; margin-right: 10px; border: 0;"
 
     # Header Content with Table for Alignment
     header_content = f"""
@@ -138,7 +138,7 @@ def create_reset_password_email(reset_link: str, frontend_url: str):
     style_body = f"margin: 0; padding: 0; width: 100%; background-color: {COLOR_BG_BODY}; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%;"
     style_wrapper = f"width: 100%; background-color: {COLOR_BG_BODY}; padding: 40px 0;"
     style_table = f"margin: 0 auto; max-width: 600px; width: 100%; background-color: {COLOR_BG_CARD}; border-radius: 8px; overflow: hidden; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;"
-    style_header = f"padding: 24px; text-align: center; background-color: #ffffff; border-bottom: 1px solid #f0f0f0;"
+    style_header = "padding: 24px; text-align: center; background-color: #ffffff; border-bottom: 1px solid #f0f0f0;"
     style_content = f"padding: 32px 24px; color: {COLOR_TEXT_MAIN}; line-height: 1.6; font-size: 16px; background-color: #ffffff;"
     style_footer = f"padding: 24px; text-align: center; font-size: 12px; color: {COLOR_TEXT_MUTED}; background-color: {COLOR_BG_BODY}; font-family: sans-serif;"
     style_button = f"display: inline-block; background-color: {COLOR_PRIMARY}; color: {COLOR_BUTTON_TEXT}; padding: 12px 32px; border-radius: 6px; text-decoration: none; font-weight: bold; font-size: 16px;"
@@ -147,7 +147,7 @@ def create_reset_password_email(reset_link: str, frontend_url: str):
     style_link = f"color: {COLOR_PRIMARY}; word-break: break-all;"
     style_footer_link = f"color: {COLOR_TEXT_MUTED}; text-decoration: underline; margin: 0 8px;"
     style_logo_text = f"font-size: 24px; font-weight: bold; color: {COLOR_TEXT_MAIN}; vertical-align: middle; font-family: sans-serif;"
-    style_logo_img = f"vertical-align: middle; height: 32px; width: auto; margin-right: 10px; border: 0;"
+    style_logo_img = "vertical-align: middle; height: 32px; width: auto; margin-right: 10px; border: 0;"
 
     header_content = f"""
     <table align="center" border="0" cellpadding="0" cellspacing="0" role="presentation" style="margin: 0 auto;">

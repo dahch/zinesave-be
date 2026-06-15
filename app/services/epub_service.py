@@ -1,19 +1,17 @@
-import os
 import json
+import logging
+import os
+import tempfile
+
 from ebooklib import epub
 from sqlalchemy.orm import Session
 
+from app.domain.models.file import File
 from app.domain.models.job import Job
 from app.domain.models.job_content import JobContent
-from app.domain.models.file import File
-
-from app.services.image_service import process_images
 from app.services.cover_service import generate_cover
+from app.services.image_service import process_images
 from app.services.metadata_service import extract_metadata
-
-
-import logging
-import tempfile
 from app.services.storage_service import storage_service
 
 logger = logging.getLogger(__name__)

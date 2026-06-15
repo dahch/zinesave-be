@@ -1,88 +1,38 @@
-from app.services.plan_service import count_active_jobs
-from app.core.plans import PLANS
 from fastapi import APIRouter, Depends
 from app.api.dependencies.auth import get_current_user
+from app.api.dependencies.services import get_user_service
 from app.domain.models.user import User
-from app.domain.models.job import Job
-from app.domain.models.cloud_connection import CloudConnection
-from sqlalchemy.orm import Session
-from app.api.dependencies.database import get_db
 from app.domain.schemas.user import UserResponse, UserUpdate
-
+from app.services.user_service import UserService
 
 router = APIRouter(prefix="/me", tags=["Me"])
 
 @router.get("", response_model=UserResponse)
-def read_me(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    connections = (
-        db.query(CloudConnection.provider)
-        .filter(CloudConnection.user_id == user.id)
-        .all()
-    )
-    providers = [c[0] for c in connections]
-    
-    # We convert to dict/object compatible with UserResponse
-    # Since 'user' is an ORM object, we can add the property or return a dict
-    return {
-        **user.__dict__,
-        "connected_providers": providers
-    }
+def read_me(
+    user: User = Depends(get_current_user), 
+    user_service: UserService = Depends(get_user_service)
+):
+    return user_service.get_me(user)
 
 @router.put("", response_model=UserResponse)
 def update_me(
     data: UserUpdate,
     user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    user_service: UserService = Depends(get_user_service)
 ):
-    if data.is_company is not None:
-        user.is_company = data.is_company
-    
-    if data.country is not None:
-        user.country = data.country
-        
-    if data.vat_number is not None:
-        user.vat_number = data.vat_number
-    
-    db.commit()
-    db.refresh(user)
-    return user
+    return user_service.update_me(user, data)
 
 @router.get("/usage")
 def get_usage(
     user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    user_service: UserService = Depends(get_user_service)
 ):
-    return {
-        "plan": user.plan,
-        "credits": user.credits,
-        "is_beta_tester": user.is_beta_tester
-    }
+    return user_service.get_usage(user)
 
 @router.get("/dashboard")
 def dashboard(
     user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    user_service: UserService = Depends(get_user_service)
 ):
-    recent_jobs = (
-        db.query(Job)
-        .filter(Job.user_id == user.id)
-        .order_by(Job.created_at.desc())
-        .limit(5)
-        .all()
-    )
-    
-    connections = (
-        db.query(CloudConnection.provider)
-        .filter(CloudConnection.user_id == user.id)
-        .all()
-    )
-    
-    # connections is a list of tuples [('google_drive',), ('dropbox',)]
-    connected_providers = [c[0] for c in connections]
-
-    return {
-        "usage": get_usage(user, db),
-        "recent_jobs": recent_jobs,
-        "connected_providers": connected_providers
-    }
+    return user_service.get_dashboard(user)
 

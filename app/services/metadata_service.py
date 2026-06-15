@@ -1,6 +1,8 @@
-from bs4 import BeautifulSoup
-from urllib.parse import urlparse
 from datetime import datetime, timezone
+from urllib.parse import urlparse
+
+from bs4 import BeautifulSoup
+
 
 def extract_metadata(html: str, url: str) -> dict:
     soup = BeautifulSoup(html, "html.parser")

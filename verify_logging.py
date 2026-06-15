@@ -1,8 +1,10 @@
 
 import logging
-import sentry_sdk
-from app.core.logging import setup_logging
 import os
+
+import sentry_sdk
+
+from app.core.logging import setup_logging
 
 # Set dummy DSN to avoid errors if not set
 if not os.getenv("SENTRY_DSN"):

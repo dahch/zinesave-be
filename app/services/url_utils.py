@@ -1,5 +1,6 @@
 from urllib.parse import urljoin, urlparse
 
+
 def resolve_url(src: str, base_url: str) -> str | None:
     if not src:
         return None

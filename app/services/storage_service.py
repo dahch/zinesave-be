@@ -1,19 +1,21 @@
-import os
 import logging
+
 import boto3
-from botocore.exceptions import ClientError
 from botocore.config import Config
+from botocore.exceptions import ClientError
+
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
 class StorageService:
     def __init__(self):
-        self.bucket = os.getenv("B2_BUCKET_NAME")
+        self.bucket = settings.B2_BUCKET_NAME
         self.s3_client = boto3.client(
             "s3",
-            endpoint_url=os.getenv("B2_ENDPOINT_URL"),
-            aws_access_key_id=os.getenv("B2_KEY_ID"),
-            aws_secret_access_key=os.getenv("B2_APPLICATION_KEY"),
+            endpoint_url=settings.B2_ENDPOINT_URL,
+            aws_access_key_id=settings.B2_KEY_ID,
+            aws_secret_access_key=settings.B2_APPLICATION_KEY,
             config=Config(signature_version="s3v4")
         )
 

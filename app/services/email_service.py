@@ -1,17 +1,17 @@
-import os
 import logging
-from mailersend import MailerSendClient
-from mailersend import EmailRequest, EmailContact
 
-from app.services.email_templates import create_verification_email, create_reset_password_email
+from mailersend import EmailContact, EmailRequest, MailerSendClient
+
+from app.core.config import settings
+from app.services.email_templates import create_reset_password_email, create_verification_email
 
 logger = logging.getLogger(__name__)
 
 class EmailService:
     def __init__(self):
-        self.api_key = os.getenv("MAILERSEND_API_KEY")
-        self.from_email = os.getenv("MAILERSEND_FROM_EMAIL", "noreply@zinesave.com")
-        self.frontend_url = os.getenv("FRONTEND_URL", "https://zinesave.io")
+        self.api_key = settings.MAILERSEND_API_KEY
+        self.from_email = settings.MAILERSEND_FROM_EMAIL
+        self.frontend_url = settings.FRONTEND_URL
         
         if not self.api_key:
             logger.warning("MAILERSEND_API_KEY not set — email sending will fail")

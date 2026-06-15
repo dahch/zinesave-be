@@ -1,7 +1,10 @@
-from sqlalchemy.orm import Session
-from sqlalchemy import func
 from datetime import datetime, timedelta, timezone
+
+from sqlalchemy import func
+from sqlalchemy.orm import Session
+
 from app.domain.models.job import Job
+
 
 def count_active_jobs(db: Session, user_id: str):
     """Count jobs created in the last 30 days, excluding failed ones.

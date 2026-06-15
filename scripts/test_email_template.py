@@ -1,6 +1,7 @@
 
 from app.services.email_templates import create_verification_email
 
+
 def test_template():
     link = "http://localhost:3000/verify?token=123"
     frontend = "http://localhost:3000"

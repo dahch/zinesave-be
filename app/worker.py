@@ -1,20 +1,17 @@
-import os
 import asyncio
 import logging
+
 import sentry_sdk
-from sentry_sdk.integrations.logging import LoggingIntegration
-from arq import create_pool
 from arq.cron import cron
+from sentry_sdk.integrations.logging import LoggingIntegration
+
+from app.core.config import settings
 from app.core.database import SessionLocal
-from app.services.pipeline_service import run_pipeline
 from app.core.queue import redis_settings
-from app.services.retention_service import RetentionService
 
 # Import models to ensure they are registered with SQLAlchemy
-from app.domain.models.user import User
-from app.domain.models.job import Job
-from app.domain.models.file import File
-from app.domain.models.cloud_connection import CloudConnection
+from app.services.pipeline_service import run_pipeline
+from app.services.retention_service import RetentionService
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +52,7 @@ class WorkerSettings:
     
     async def on_startup(self):
         # Initialize Sentry for the worker process
-        sentry_dsn = os.getenv("SENTRY_DSN")
+        sentry_dsn = settings.SENTRY_DSN
         if sentry_dsn:
             sentry_sdk.init(
                 dsn=sentry_dsn,

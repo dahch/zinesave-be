@@ -1,90 +1,44 @@
 import os
 import logging
+import requests as requests_lib
+from fastapi import APIRouter, Depends, Request
+from fastapi.responses import RedirectResponse
+from google.auth.transport import requests as google_requests
+from google.oauth2 import id_token
+from google_auth_oauthlib.flow import Flow
 from slowapi import Limiter
 from slowapi.util import get_remote_address
-
 from sqlalchemy.orm import Session
-from google.oauth2 import id_token
-from google.auth.transport import requests
-from google_auth_oauthlib.flow import Flow
-from fastapi.exceptions import HTTPException
-from fastapi import APIRouter, Request, Depends
-from fastapi.responses import RedirectResponse
 
-from app.domain.schemas.auth import Register, Login, ForgotPassword, ResetPassword
-
-from app.domain.models.user import User
-
+from app.api.dependencies.auth import get_current_user, get_user_from_token
 from app.api.dependencies.database import get_db
-from app.core.security import create_access_token, create_reset_token, verify_reset_token
-from app.core.password import hash_password, verify_password
-
-from app.api.dependencies.auth import get_current_user
-from app.api.dependencies.auth import get_user_from_token
-from app.domain.models.cloud_connection import CloudConnection
-import requests as requests_lib
-from app.services.email_service import EmailService
+from app.api.dependencies.services import get_auth_service
+from app.core.config import settings
+from app.core.security import create_access_token
+from app.domain.models.user import User
+from app.domain.schemas.auth import ForgotPassword, Login, Register, ResetPassword
+from app.services.auth_service import AuthService
 
 logger = logging.getLogger(__name__)
 
-# Only disable HTTPS requirement in development
-if os.getenv("ENVIRONMENT", "production") != "production":
+if settings.ENVIRONMENT != "production":
     os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
 
 os.environ['OAUTHLIB_RELAX_TOKEN_SCOPE'] = '1'
+
 router = APIRouter(prefix="/auth", tags=["Auth"])
-
-def resolve_user(db: Session, google_info: dict) -> User:
-    user = (
-        db.query(User)
-        .filter(
-            User.provider == "google",
-            User.provider_id == google_info["sub"]
-        )
-        .first()
-    )
-
-    if user:
-        return user
-    
-    #fallback by email
-    user = db.query(User).filter(User.email == google_info["email"]).first()
-
-    if user and user.provider == "email":
-        user.provider = "google"
-        user.provider_id = google_info["sub"]
-        db.commit()
-        return user
-
-    if (user):
-        user.provider = "google"
-        user.provider_id = google_info["sub"]
-        db.commit()
-        return user
-
-    user = User(
-        email=google_info["email"],
-        name=google_info.get("name"),
-        provider="google",
-        provider_id=google_info["sub"],
-        plan="free",
-        is_verified=True
-    )
-    db.add(user)
-    db.commit()
-    return user
 
 def get_google_client_config():
     return {
         "web": {
-            "client_id": os.getenv("GOOGLE_CLIENT_ID"),
-            "project_id": os.getenv("GOOGLE_PROJECT_ID"),
+            "client_id": settings.GOOGLE_CLIENT_ID,
+            "project_id": settings.GOOGLE_PROJECT_ID,
             "auth_uri": "https://accounts.google.com/o/oauth2/auth",
             "token_uri": "https://oauth2.googleapis.com/token",
             "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-            "client_secret": os.getenv("GOOGLE_CLIENT_SECRET"),
+            "client_secret": settings.GOOGLE_CLIENT_SECRET,
             "redirect_uris": [
-                os.getenv("BACKEND_URL") + "/auth/google/callback",
+                settings.BACKEND_URL + "/auth/google/callback",
                 "http://localhost:8000/auth/google/callback"
             ]
         }
@@ -102,8 +56,7 @@ def google_login():
     flow = Flow.from_client_config(
         get_google_client_config(),
         scopes=SCOPES,
-        # Use env var for redirect uri
-        redirect_uri=os.getenv("BACKEND_URL") + "/auth/google/callback"
+        redirect_uri=settings.BACKEND_URL + "/auth/google/callback"
     )
 
     auth_url, _ = flow.authorization_url(
@@ -118,7 +71,7 @@ def google_authorize(user: User = Depends(get_current_user)):
     flow = Flow.from_client_config(
         get_google_client_config(),
         scopes=SCOPES,
-        redirect_uri=os.getenv("BACKEND_URL") + "/auth/google/callback"
+        redirect_uri=settings.BACKEND_URL + "/auth/google/callback"
     )
 
     state = create_access_token(user)
@@ -132,14 +85,12 @@ def google_authorize(user: User = Depends(get_current_user)):
     return {"auth_url": auth_url}
 
 @router.get("/google/callback")
-def google_callback(request: Request, db: Session = Depends(get_db)):
+def google_callback(request: Request, db: Session = Depends(get_db), auth_service: AuthService = Depends(get_auth_service)):
     state = request.query_params.get("state")
     existing_user = None
 
     if state:
         try:
-            # Attempt to decode state as user token (Binding Flow)
-            # We catch exception because normal login might have a state (if used) or invalid one
             existing_user = get_user_from_token(state, db)
         except Exception:
             existing_user = None
@@ -147,75 +98,53 @@ def google_callback(request: Request, db: Session = Depends(get_db)):
     flow = Flow.from_client_config(
         get_google_client_config(),
         scopes=SCOPES,
-        redirect_uri=os.getenv("BACKEND_URL") + "/auth/google/callback",
+        redirect_uri=settings.BACKEND_URL + "/auth/google/callback",
         state=state 
     )
-
-    logger.debug(f"redirect_uri used in flow: {os.getenv('BACKEND_URL')}/auth/google/callback")
-    logger.debug(f"request.url: {request.url}")
     
     code = request.query_params.get("code")
     token_response = flow.fetch_token(code=code)
     creds = flow.credentials
-    transport = requests.Request()
+    transport = google_requests.Request()
     idinfo = id_token.verify_oauth2_token(
         creds.id_token,
         transport,
-        os.getenv("GOOGLE_CLIENT_ID")
+        settings.GOOGLE_CLIENT_ID
     )
     
     target_user = None
     is_binding = False
 
     if existing_user:
-        # Binding to existing authenticated user
         target_user = existing_user
         is_binding = True
     else:
-        # Login/Register flow
-        target_user = resolve_user(db, idinfo)
+        target_user = auth_service.resolve_oauth_user(
+            email=idinfo.get("email"),
+            name=idinfo.get("name"),
+            provider_id=idinfo.get("sub"),
+            provider="google"
+        )
         is_binding = False
 
-    # Check if 'https://www.googleapis.com/auth/drive.file' is in the granted scopes.
-    # The scope string in token_response is usually space-separated.
     granted_scopes = token_response.get("scope", "")
     drive_scope = "https://www.googleapis.com/auth/drive.file"
 
     if drive_scope in granted_scopes:
-        # Update Cloud Connection
-        # Check if connection exists
-        connection = (
-            db.query(CloudConnection)
-            .filter(
-                CloudConnection.user_id == target_user.id,
-                CloudConnection.provider == "google_drive"
-            )
-            .first()
+        auth_service.save_cloud_connection(
+            user_id=target_user.id,
+            provider="google_drive",
+            access_token=creds.token,
+            refresh_token=creds.refresh_token,
+            expiry=creds.expiry,
+            metadata={"email": idinfo.get("email")}
         )
 
-        if not connection:
-            connection = CloudConnection(
-                user_id=target_user.id,
-                provider="google_drive"
-            )
-            db.add(connection)
-        
-        connection.access_token = creds.token
-        connection.refresh_token = creds.refresh_token
-        if creds.expiry:
-            connection.expires_at = creds.expiry
-
-        connection.metadata_info = {"email": idinfo.get("email")}
-
-        db.commit()
-
-    frontend_url = os.getenv("FRONTEND_URL")
+    frontend_url = settings.FRONTEND_URL
 
     if is_binding:
-        # Redirect to account page
         return RedirectResponse(url=f"{frontend_url}/dashboard/account")
     else:
-        # Redirect with login token
         token = create_access_token(target_user)
         return RedirectResponse(url=f"{frontend_url}/auth/callback?token={token}")
 
@@ -223,85 +152,25 @@ limiter = Limiter(key_func=get_remote_address)
 
 @router.post("/register")
 @limiter.limit("5/minute")
-def register(request: Request, data: Register, db: Session = Depends(get_db)):
-    if db.query(User).filter(User.email == data.email).first():
-        raise HTTPException(400, "Email already exists")
-
-    user = User(
-        email=data.email,
-        name=data.name,
-        provider="email",
-        provider_id=data.email,
-        password_hash=hash_password(data.password),
-        plan="free",
-        is_company=data.is_company,
-        country=data.country,
-        vat_number=data.vat_number,
-        is_verified=False
-    )
-
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-
-    # Send verification email
-    token = create_access_token(user)
-    
-    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
-    verification_link = f"{frontend_url}/verify?token={token}"
-    
-    email_service = EmailService()
-    response = email_service.send_verification_email(user.email, verification_link)
-    logger.info(f"Verification email sent to {user.email}, response status: {response}")
+def register(request: Request, data: Register, auth_service: AuthService = Depends(get_auth_service)):
+    auth_service.register_user(data)
     return {
         "message": "Registration successful. Please check your email to verify your account."
     }
 
 @router.post("/login")
 @limiter.limit("10/minute")
-def login(request: Request, data: Login, db: Session = Depends(get_db)):
-    user = (
-        db.query(User)
-        .filter(
-            User.email == data.email,
-            User.provider == "email"
-        )
-        .first()
-    )
-
-    if not user or not verify_password(data.password, user.password_hash):
-        raise HTTPException(401, "Invalid credentials")
-
-    if not user.is_verified:
-        raise HTTPException(403, "Email not verified")
-
-    token = create_access_token(user)
-
+def login(request: Request, data: Login, auth_service: AuthService = Depends(get_auth_service)):
+    token = auth_service.login_user(data)
     return {
         "access_token": token,
         "token_type": "bearer"
     }
 
 @router.post("/verify")
-def verify_email(token: str, db: Session = Depends(get_db)):
-    try:
-        user = get_user_from_token(token, db)
-    except Exception:
-        raise HTTPException(400, "Invalid or expired token")
-
-    if not user:
-        raise HTTPException(400, "User not found")
-
-    if user.is_verified:
-        return {"message": "Email already verified"}
-
-    user.is_verified = True
-    db.commit()
-
-    # Log user in immediately? Or just return success.
-    # Let's return a fresh token so they are logged in on frontend
-    new_token = create_access_token(user)
-    
+def verify_email(token: str, db: Session = Depends(get_db), auth_service: AuthService = Depends(get_auth_service)):
+    user = get_user_from_token(token, db)
+    new_token = auth_service.verify_email(user)
     return {
         "message": "Email verified successfully",
         "access_token": new_token,
@@ -310,85 +179,38 @@ def verify_email(token: str, db: Session = Depends(get_db)):
 
 @router.post("/resend-verification")
 @limiter.limit("3/minute")
-def resend_verification(request: Request, email: str, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == email).first()
-    
-    # Always return the same generic message to prevent user enumeration
-    generic_message = "If the email is registered and not yet verified, a verification link has been sent."
-
-    if not user:
-        return {"message": generic_message}
-
-    if user.is_verified:
-        # Don't reveal that the email is verified — use the same generic message
-        return {"message": generic_message}
-
-    token = create_access_token(user)
-    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
-    verification_link = f"{frontend_url}/verify?token={token}"
-    
-    email_service = EmailService()
-    email_service.send_verification_email(user.email, verification_link)
-
-    return {"message": generic_message}
-
+def resend_verification(request: Request, email: str, auth_service: AuthService = Depends(get_auth_service)):
+    auth_service.resend_verification(email)
+    return {"message": "If the email is registered and not yet verified, a verification link has been sent."}
 
 @router.post("/forgot-password")
 @limiter.limit("3/minute")
-def forgot_password(request: Request, data: ForgotPassword, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == data.email).first()
-    
-    # We always return success to prevent email enumeration
-    if not user or user.provider != "email":
-        return {"message": "If the email is registered, a password reset link has been sent."}
-    
-    token = create_reset_token(user.email)
-    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
-    reset_link = f"{frontend_url}/reset-password?token={token}"
-    
-    email_service = EmailService()
-    email_service.send_password_reset_email(user.email, reset_link)
-    
+def forgot_password(request: Request, data: ForgotPassword, auth_service: AuthService = Depends(get_auth_service)):
+    auth_service.request_password_reset(data.email)
     return {"message": "If the email is registered, a password reset link has been sent."}
 
 @router.post("/reset-password")
-def reset_password(data: ResetPassword, db: Session = Depends(get_db)):
-    email = verify_reset_token(data.token)
-    if not email:
-        raise HTTPException(400, "Invalid or expired token")
-        
-    user = db.query(User).filter(User.email == email).first()
-    if not user:
-        raise HTTPException(400, "User not found")
-        
-    user.password_hash = hash_password(data.new_password)
-    db.commit()
-    
+def reset_password(data: ResetPassword, auth_service: AuthService = Depends(get_auth_service)):
+    auth_service.reset_password(data)
     return {"message": "Password updated successfully"}
-
 
 # --- DROPBOX AUTH ---
 @router.get("/dropbox/authorize")
 def dropbox_authorize(user: User = Depends(get_current_user)):
-    client_id = os.getenv("DROPBOX_CLIENT_ID")
-    redirect_uri = os.getenv("BACKEND_URL") + "/auth/dropbox/callback"
-    
-    # Create short-lived token for state
+    client_id = settings.DROPBOX_CLIENT_ID
+    redirect_uri = settings.BACKEND_URL + "/auth/dropbox/callback"
     state = create_access_token(user)
-    
     url = f"https://www.dropbox.com/oauth2/authorize?client_id={client_id}&response_type=code&redirect_uri={redirect_uri}&token_access_type=offline&state={state}"
     return {"auth_url": url}
 
 @router.get("/dropbox/callback")
-def dropbox_callback(code: str, state: str, db: Session = Depends(get_db)):
-    # Verify State
+def dropbox_callback(code: str, state: str, db: Session = Depends(get_db), auth_service: AuthService = Depends(get_auth_service)):
     user = get_user_from_token(state, db)
 
-    client_id = os.getenv("DROPBOX_CLIENT_ID")
-    client_secret = os.getenv("DROPBOX_CLIENT_SECRET")
-    redirect_uri = os.getenv("BACKEND_URL") + "/auth/dropbox/callback"
+    client_id = settings.DROPBOX_CLIENT_ID
+    client_secret = settings.DROPBOX_CLIENT_SECRET
+    redirect_uri = settings.BACKEND_URL + "/auth/dropbox/callback"
     
-    # Exchange code for token
     token_url = "https://api.dropboxapi.com/oauth2/token"
     data = {
         "code": code,
@@ -399,38 +221,24 @@ def dropbox_callback(code: str, state: str, db: Session = Depends(get_db)):
     }
     
     response = requests_lib.post(token_url, data=data)
-    if response.status_code != 200:
-        raise HTTPException(400, "Failed to get Dropbox token")
-        
     tokens = response.json()
     
-    # Save Connection
-    connection = db.query(CloudConnection).filter(
-        CloudConnection.user_id == user.id,
-        CloudConnection.provider == "dropbox"
-    ).first()
+    auth_service.save_cloud_connection(
+        user_id=user.id,
+        provider="dropbox",
+        access_token=tokens["access_token"],
+        refresh_token=tokens.get("refresh_token")
+    )
     
-    if not connection:
-        connection = CloudConnection(user_id=user.id, provider="dropbox")
-        db.add(connection)
-        
-    connection.access_token = tokens["access_token"]
-    connection.refresh_token = tokens.get("refresh_token") # Only allowed if token_access_type=offline
-    
-    db.commit()
-    
-    # Redirect to Frontend
-    frontend_url = os.getenv("FRONTEND_URL")
+    frontend_url = settings.FRONTEND_URL
     return RedirectResponse(url=f"{frontend_url}/dashboard/account")
 
 # --- ONEDRIVE AUTH ---
 @router.get("/onedrive/authorize")
 def onedrive_authorize(user: User = Depends(get_current_user)):
-    client_id = os.getenv("ONEDRIVE_CLIENT_ID")
-    redirect_uri = os.getenv("BACKEND_URL") + "/auth/onedrive/callback"
+    client_id = settings.ONEDRIVE_CLIENT_ID
+    redirect_uri = settings.BACKEND_URL + "/auth/onedrive/callback"
     scope = "Files.ReadWrite User.Read offline_access"
-    
-    # State with user token
     state = create_access_token(user)
     
     url = (
@@ -441,13 +249,12 @@ def onedrive_authorize(user: User = Depends(get_current_user)):
     return {"auth_url": url}
 
 @router.get("/onedrive/callback")
-def onedrive_callback(code: str, state: str, db: Session = Depends(get_db)):
-    # Verify State
+def onedrive_callback(code: str, state: str, db: Session = Depends(get_db), auth_service: AuthService = Depends(get_auth_service)):
     user = get_user_from_token(state, db)
 
-    client_id = os.getenv("ONEDRIVE_CLIENT_ID")
-    client_secret = os.getenv("ONEDRIVE_CLIENT_SECRET")
-    redirect_uri = os.getenv("BACKEND_URL") + "/auth/onedrive/callback"
+    client_id = settings.ONEDRIVE_CLIENT_ID
+    client_secret = settings.ONEDRIVE_CLIENT_SECRET
+    redirect_uri = settings.BACKEND_URL + "/auth/onedrive/callback"
     
     token_url = "https://login.microsoftonline.com/common/oauth2/v2.0/token"
     data = {
@@ -460,24 +267,14 @@ def onedrive_callback(code: str, state: str, db: Session = Depends(get_db)):
     }
     
     response = requests_lib.post(token_url, data=data)
-    if response.status_code != 200:
-        raise HTTPException(400, f"Failed to get OneDrive token: {response.text}")
-        
     tokens = response.json()
     
-    connection = db.query(CloudConnection).filter(
-        CloudConnection.user_id == user.id,
-        CloudConnection.provider == "onedrive"
-    ).first()
+    auth_service.save_cloud_connection(
+        user_id=user.id,
+        provider="onedrive",
+        access_token=tokens["access_token"],
+        refresh_token=tokens.get("refresh_token")
+    )
     
-    if not connection:
-        connection = CloudConnection(user_id=user.id, provider="onedrive")
-        db.add(connection)
-        
-    connection.access_token = tokens["access_token"]
-    connection.refresh_token = tokens.get("refresh_token")
-    
-    db.commit()
-    
-    frontend_url = os.getenv("FRONTEND_URL")
+    frontend_url = settings.FRONTEND_URL
     return RedirectResponse(url=f"{frontend_url}/dashboard/account")

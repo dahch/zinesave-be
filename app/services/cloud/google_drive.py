@@ -1,11 +1,13 @@
-import os
-from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
+from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 from sqlalchemy.orm import Session
+
+from app.core.config import settings
 from app.domain.models.cloud_connection import CloudConnection
 from app.services.cloud.adapter import CloudStorageAdapter, UploadResult
+
 
 class GoogleDriveAdapter(CloudStorageAdapter):
     def upload_file(self, file_path: str, connection: CloudConnection, db: Session) -> UploadResult:
@@ -13,8 +15,8 @@ class GoogleDriveAdapter(CloudStorageAdapter):
             token=connection.access_token,
             refresh_token=connection.refresh_token,
             token_uri="https://oauth2.googleapis.com/token",
-            client_id=os.getenv("GOOGLE_CLIENT_ID"),
-            client_secret=os.getenv("GOOGLE_CLIENT_SECRET")
+            client_id=settings.GOOGLE_CLIENT_ID,
+            client_secret=settings.GOOGLE_CLIENT_SECRET
         )
 
         if creds.expired and creds.refresh_token:

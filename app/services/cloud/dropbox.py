@@ -1,9 +1,12 @@
-import os
 import json
 import logging
+import os
+from datetime import datetime, timedelta, timezone
+
 import requests
-from datetime import datetime, timezone, timedelta
 from sqlalchemy.orm import Session
+
+from app.core.config import settings
 from app.domain.models.cloud_connection import CloudConnection
 from app.services.cloud.adapter import CloudStorageAdapter, UploadResult
 
@@ -103,8 +106,8 @@ class DropboxAdapter(CloudStorageAdapter):
         
         logger.info("Refreshing Dropbox access token")
         
-        client_id = os.getenv("DROPBOX_CLIENT_ID")
-        client_secret = os.getenv("DROPBOX_CLIENT_SECRET")
+        client_id = settings.DROPBOX_CLIENT_ID
+        client_secret = settings.DROPBOX_CLIENT_SECRET
         
         if not client_id or not client_secret:
             logger.error("DROPBOX_CLIENT_ID or DROPBOX_CLIENT_SECRET not set")

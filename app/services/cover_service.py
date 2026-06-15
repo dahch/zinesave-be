@@ -1,8 +1,8 @@
-import os
 import io
 import textwrap
 from datetime import datetime, timezone
 from urllib.parse import urlparse
+
 from PIL import Image, ImageDraw, ImageFont
 
 # Directory Configuration
@@ -47,7 +47,7 @@ def get_font(name_choices, size):
         except OSError:
             continue
             
-    print(f"⚠️ Warning: No nice TTF font found. Using default.")
+    print("⚠️ Warning: No nice TTF font found. Using default.")
     return ImageFont.load_default()
 
 def draw_text_centered(draw, text, font, color, center_x, start_y, max_width, line_spacing=1.2):

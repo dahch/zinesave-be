@@ -1,7 +1,10 @@
 import uuid
-from sqlalchemy import Column, String, ForeignKey, DateTime
+
+from sqlalchemy import Column, DateTime, ForeignKey, String
 from sqlalchemy.sql import func
+
 from app.core.database import Base
+
 
 class PurchaseIntention(Base):
     __tablename__ = "purchase_intentions"

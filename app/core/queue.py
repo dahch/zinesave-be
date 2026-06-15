@@ -1,9 +1,11 @@
-import os
-from arq.connections import RedisSettings
 from urllib.parse import urlparse
-import certifi
 
-REDIS_URL = os.getenv("REDIS_URL")
+import certifi
+from arq.connections import RedisSettings
+
+from app.core.config import settings
+
+REDIS_URL = settings.REDIS_URL
 
 # Parse Redis URL or use defaults
 # ARQ RedisSettings is flexible
@@ -23,7 +25,7 @@ if REDIS_URL:
 else:
     # For simplicity, if running in docker-compose, hostname is "redis"
     redis_settings = RedisSettings(
-        host=os.getenv("REDIS_HOST", "localhost"),
-        port=int(os.getenv("REDIS_PORT", 6379)),
+        host=settings.REDIS_HOST,
+        port=int(settings.REDIS_PORT),
     )
 

@@ -1,5 +1,7 @@
 from datetime import datetime
+
 from pydantic import BaseModel, HttpUrl
+
 
 class JobCreate(BaseModel):
     url: HttpUrl

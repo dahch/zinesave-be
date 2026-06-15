@@ -1,19 +1,22 @@
-import os
-import sentry_sdk
-import logging
-from fastapi import FastAPI, Request
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
-from slowapi.errors import RateLimitExceeded
-from app.api.routes import jobs, auth, me, upload, intentions
-from app.domain.models import job, job_content, file
-
 from contextlib import asynccontextmanager
+
+import sentry_sdk
 from arq import create_pool
-from app.core.queue import redis_settings
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
+
+from app.api.routes import auth, intentions, jobs, me, upload
+from app.core.config import settings
 from app.core.logging import setup_logging
+from app.core.queue import redis_settings
+from app.domain.exceptions import DomainException
+import logging
+
+logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -23,7 +26,7 @@ async def lifespan(app: FastAPI):
 
 setup_logging()
 
-sentry_dsn = os.getenv("SENTRY_DSN")
+sentry_dsn = settings.SENTRY_DSN
 if sentry_dsn:
     sentry_sdk.init(
         dsn=sentry_dsn,
@@ -37,6 +40,14 @@ limiter = Limiter(key_func=get_remote_address)
 app = FastAPI(title="Reader -> ePub", description="API for converting reader to epub", version="1.0.0", lifespan=lifespan)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+@app.exception_handler(DomainException)
+async def domain_exception_handler(request: Request, exc: DomainException):
+    logger.warning(f"Domain exception: {exc.message} (Status: {exc.status_code})")
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"message": exc.message},
+    )
 
 app.add_middleware(
     CORSMiddleware,
@@ -64,7 +75,7 @@ def healthcheck():
     return {"status": "ok"}
 
 # Only expose sentry-debug in non-production environments
-if os.getenv("ENVIRONMENT", "production") != "production":
+if settings.ENVIRONMENT != "production":
     @app.get("/sentry-debug")
     async def trigger_error():
         division_by_zero = 1 / 0

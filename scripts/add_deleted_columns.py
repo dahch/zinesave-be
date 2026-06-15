@@ -1,11 +1,13 @@
-import sys
 import os
+import sys
 
 # Add parent directory to path to import app modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from sqlalchemy import text
+
 from app.core.database import engine
+
 
 def migrate():
     print("Starting migration: Adding is_deleted and deleted_at columns to files table...")

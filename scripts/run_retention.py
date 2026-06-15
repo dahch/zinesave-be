@@ -1,9 +1,10 @@
-import sys
-import os
 import logging
+import os
+import sys
+
 import sentry_sdk
-from sentry_sdk.integrations.logging import LoggingIntegration
 from dotenv import load_dotenv
+from sentry_sdk.integrations.logging import LoggingIntegration
 
 # Add parent directory to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

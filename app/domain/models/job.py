@@ -1,7 +1,10 @@
 import uuid
-from sqlalchemy import Column, String, Integer, DateTime, ForeignKey, JSON
+
+from sqlalchemy import JSON, Column, DateTime, ForeignKey, Integer, String
 from sqlalchemy.sql import func
+
 from app.core.database import Base
+
 
 class Job(Base):
     __tablename__ = "jobs"

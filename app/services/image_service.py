@@ -1,11 +1,13 @@
-import uuid
-import logging
-import requests
-from PIL import Image
 import io
+import logging
+import uuid
+
+import requests
 from bs4 import BeautifulSoup
-from app.services.url_utils import resolve_url
 from ebooklib import epub
+from PIL import Image
+
+from app.services.url_utils import resolve_url
 
 logger = logging.getLogger(__name__)
 

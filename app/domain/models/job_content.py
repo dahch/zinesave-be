@@ -1,7 +1,10 @@
 import uuid
-from sqlalchemy import Column, String, Text, DateTime, ForeignKey
+
+from sqlalchemy import Column, DateTime, ForeignKey, String, Text
 from sqlalchemy.sql import func
+
 from app.core.database import Base
+
 
 class JobContent(Base):
     __tablename__ = "job_contents"

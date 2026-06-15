@@ -1,7 +1,10 @@
 import uuid
-from sqlalchemy import Column, String, DateTime, JSON
+
+from sqlalchemy import JSON, Column, DateTime, String
 from sqlalchemy.sql import func
+
 from app.core.database import Base
+
 
 class CloudConnection(Base):
     __tablename__ = "cloud_connections"

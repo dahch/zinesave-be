@@ -1,13 +1,15 @@
+
+import jwt
 from fastapi import Depends, HTTPException
 from fastapi.security import OAuth2PasswordBearer
-import jwt
-from app.domain.models.user import User
-import os
 from sqlalchemy.orm import Session
+
 from app.api.dependencies.database import get_db
+from app.core.config import settings
+from app.domain.models.user import User
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
-JWT_SECRET = os.getenv("JWT_SECRET")
+JWT_SECRET = settings.JWT_SECRET
 
 def get_user_from_token(token: str, db: Session) -> User:
     try:

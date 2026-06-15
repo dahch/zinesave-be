@@ -1,16 +1,17 @@
-import sys
 import os
+import sys
 import unittest
-from unittest.mock import MagicMock, patch
 from datetime import datetime, timedelta, timezone
+from unittest.mock import MagicMock, patch
 
 # Add parent directory to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app.domain.models.user import User
-from app.domain.models.job import Job
 from app.domain.models.file import File
+from app.domain.models.job import Job
+from app.domain.models.user import User
 from app.services.retention_service import RetentionService
+
 
 class TestRetentionService(unittest.TestCase):
     def setUp(self):

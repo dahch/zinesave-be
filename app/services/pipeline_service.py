@@ -1,10 +1,12 @@
-from sqlalchemy.orm import Session
-from app.domain.models.job import Job
-from app.services.extract_service import extract_content
 import logging
+
 import sentry_sdk
-from app.services.normalize_service import normalize_html
+from sqlalchemy.orm import Session
+
+from app.domain.models.job import Job
 from app.services.epub_service import generate_epub
+from app.services.extract_service import extract_content
+from app.services.normalize_service import normalize_html
 
 logger = logging.getLogger(__name__)
 
