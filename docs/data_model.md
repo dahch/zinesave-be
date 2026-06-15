@@ -5,18 +5,16 @@ Tags: Codebase
 
 Se va a diseñar con estas metas claras:
 
-- 🧱 **Simple hoy (SQLite)**
-- 🔁 **Migrable mañana (PostgreSQL)**
-- 🔍 **Auditable y debuggable**
-- 💰 **Preparado para billing y límites**
-- ⚙️ **Alineado con el pipeline async que ya definimos**
+- 🧱 **Escalable (PostgreSQL vía SQLAlchemy)**
+- 🔍 **Auditable y debuggable**
+- 💰 **Preparado para billing y límites (Intentions / Créditos)**
+- ⚙️ **Aislado del dominio mediante el Patrón Repositorio**
 
 ---
 
 # 🗄️ Modelo de Datos – SaaS URL → ePub
 
-Se detalla **entidad por entidad**, explicando:
-
+Se detalla **entidad por entidad**, explicando:
 - qué guarda
 - por qué existe
 - qué NO guardamos (importante)
@@ -27,197 +25,119 @@ Se detalla **entidad por entidad**, explicando:
 
 ```sql
 users
-
 ```
 
 ```
-id              UUID (PK)
-email           TEXT (unique, indexed)
-name            TEXT
-provider        TEXT        -- google
-provider_id     TEXT        -- google sub
-plan            TEXT        -- free | pro | team
-is_active       BOOLEAN
-created_at      TIMESTAMP
-updated_at      TIMESTAMP
-
+id              String (PK)
+email           String (unique, indexed)
+name            String
+password_hash   String
+is_verified     Boolean
+credits         Integer
+created_at      DateTime
+updated_at      DateTime
 ```
 
 ### Decisiones importantes
 
-- ❌ No passwords (OAuth only)
-- ✔ Plan en la tabla (rápido para límites)
-- ✔ Provider desacoplado (futuro GitHub)
+- ✔ Soporte de login nativo (`password_hash`) y validación de correo (`is_verified`).
+- ✔ `credits` incrustado para control rápido del rate limit, recargado a través de compras (`Intentions`).
+- ✔ Conexiones de nube abstraídas a otra tabla (`cloud_connections`).
 
 ---
 
-## 2️⃣ Usage (billing técnico)
+## 2️⃣ Intention (Créditos y Compras)
 
 ```sql
-usage
-
+intentions
 ```
 
 ```
-id              UUID (PK)
-user_id         UUID (FK)
-period          TEXT        -- 2025-01
-jobs_used       INTEGER
-jobs_limit      INTEGER
-reset_at        TIMESTAMP
-
+id              String (PK)
+user_id         String (FK)
+credits_to_add  Integer
+amount_cents    Integer
+currency        String
+status          String      -- pending | completed | failed
+created_at      DateTime
+updated_at      DateTime
 ```
 
-📌 **Separar usage de user** nos salva cuando agreguemos Stripe.
+📌 **Por qué existe:** Permite llevar un registro auditable de intenciones de recarga, compras vía Stripe u otros proveedores, separando el saldo actual del usuario (User) del historial transaccional.
 
 ---
 
-## 3️⃣ Job (corazón del sistema)
+## 3️⃣ CloudConnection (Exportaciones externas)
+
+```sql
+cloud_connections
+```
+
+```
+id              String (PK)
+user_id         String (FK)
+provider        String      -- google_drive | dropbox | onedrive
+access_token    String
+refresh_token   String
+expiry          DateTime
+metadata        JSONB
+created_at      DateTime
+```
+
+👉 Separa las credenciales OAuth externas del modelo de usuario, permitiendo a los usuarios enlazar múltiples cuentas de nubes externas.
+
+---
+
+## 4️⃣ Job (corazón del sistema)
 
 ```sql
 jobs
-
 ```
 
 ```
-id              UUID (PK)
-user_id         UUID (FK)
-source_url      TEXT
-status          TEXT        -- queued | processing | done | failed
-current_step    TEXT        -- extracting | generating...
-progress        INTEGER     -- 0-100
-error_code      TEXT
-error_message   TEXT
+id              String (PK)
+user_id         String (FK)
+source_url      String
+base_url        String
+status          String      -- pending | processing | completed | failed
+progress        Integer     -- 0-100
+error_message   String
 
-created_at      TIMESTAMP
-started_at      TIMESTAMP
-finished_at     TIMESTAMP
-
+created_at      DateTime
+started_at      DateTime
+finished_at     DateTime
 ```
 
 ### Claves
 
-- ✔ `current_step` = debug fácil
-- ✔ `error_code` = UX limpia
-- ❌ No guardar archivos aquí
+- ✔ `error_message` para feedback de UX y debug.
+- ❌ No se guardan archivos binarios aquí, usamos la tabla `File` o storage externo (Backblaze).
 
 ---
 
-## 4️⃣ Article (contenido lógico)
-
-```sql
-articles
-
-```
-
-```
-id              UUID (PK)
-job_id          UUID (FK)
-title           TEXT
-author          TEXT
-language        TEXT
-word_count      INTEGER
-source_url      TEXT
-
-created_at      TIMESTAMP
-
-```
-
-📌 Esto te permite:
-
-- Historial
-- Re-generar
-- Multi-capítulo después
+## 5️⃣ Article / Metadata (contenido lógico futuro)
+Actualmente integrado parcialmente o no modelado explícitamente como una tabla aislada más allá de `job_contents` si se procesan capítulos múltiples, pero los metadatos generados se pueden agregar a futuro para tener un histórico independiente del trabajo.
 
 ---
 
-## 5️⃣ JobContent (intermedios 🔥)
-
-```sql
-job_contents
-
-```
-
-```
-id              UUID (PK)
-job_id          UUID (FK)
-step            TEXT        -- extracted | normalized
-content_type    TEXT        -- html | text
-content         TEXT        -- HTML limpio
-created_at      TIMESTAMP
-
-```
-
-👉 **Tabla clave para debugging**
-
-- Podemos reintentar sin volver a descargar
-- Posibilita inspeccionar errores de Readability
-
----
-
-## 6️⃣ File (outputs)
+## 6️⃣ File (outputs / ePub)
 
 ```sql
 files
-
 ```
 
 ```
-id              UUID (PK)
-job_id          UUID (FK)
-type            TEXT        -- epub
-path            TEXT        -- local or remote
-size_bytes      INTEGER
-checksum        TEXT
-created_at      TIMESTAMP
-
+id              String (PK)
+job_id          String (FK)
+user_id         String (FK)
+filename        String
+size_bytes      Integer
+storage_path    String
+content_type    String      -- application/epub+zip
+created_at      DateTime
 ```
 
-📌 No asumir Drive siempre → path abstracto.
-
----
-
-## 7️⃣ Export (integraciones)
-
-```sql
-exports
-
-```
-
-```
-id              UUID (PK)
-job_id          UUID (FK)
-provider        TEXT        -- google_drive
-external_id     TEXT        -- drive file id
-status          TEXT        -- pending | done | failed
-error_message   TEXT
-created_at      TIMESTAMP
-
-```
-
-👉 Permite:
-
-- Reintentar export
-- Múltiples destinos en el futuro
-
----
-
-## 8️⃣ Webhook (futuro)
-
-```sql
-webhooks
-
-```
-
-```
-id              UUID (PK)
-user_id         UUID (FK)
-url             TEXT
-event           TEXT        -- job.completed
-secret          TEXT
-is_active       BOOLEAN
-
-```
+📌 `storage_path` asume almacenamiento remoto genérico (B2) para descargar, independientemente de la exportación a Google Drive u otros.
 
 ---
 
@@ -225,45 +145,18 @@ is_active       BOOLEAN
 
 ```
 User
- ├──Usage
- ├──Job
- │    ├──Article
- │    ├──JobContent
- │    ├──File
- │    └──Export
-
+ ├──CloudConnection (0..N)
+ ├──Intention (0..N)
+ ├──Job (0..N)
+ │    └──File (1..N)
 ```
 
 ---
 
-# 🚦 Índices mínimos (importantes)
+# 🛡️ Patrón Repositorio (Clean Architecture)
 
-- `jobs.user_id`
-- `jobs.status`
-- `articles.job_id`
-- `usage.user_id + period`
+Las rutas de FastAPI (y los Servicios) **no interactúan directamente con SQLAlchemy ni con estos modelos de datos**.
 
-SQLite aguanta esto sin problema.
-
----
-
-# 🧠 Decisiones inteligentes (te ahorran dinero)
-
-✔ Guardar intermedios → menos reprocesos
-
-✔ Separar exports → reintentos baratos
-
-✔ Job ≠ Article → escalabilidad futura
-
-✔ Usage separado → billing simple
-
----
-
-# ❌ Qué NO hacemos (todavía)
-
-- ❌ Eventos
-- ❌ Soft deletes
-- ❌ Auditoría compleja
-- ❌ Versionado de contenido
-
-Todo eso viene **cuando haya usuarios**.
+Para cada entidad, existe una clase en `app/domain/repositories/` (e.g. `UserRepository`, `JobRepository`) que expone los métodos CRUD abstractos:
+- Ventaja 1: Se oculta el código SQL / SQLAlchemy.
+- Ventaja 2: Permite hacer tests mediante `unittest.mock.Mock` sin requerir base de datos de testeo.

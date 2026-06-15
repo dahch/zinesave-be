@@ -3,13 +3,13 @@
 Tipo: Especificación
 Estado: Completado
 Fecha de creación: 25 de diciembre de 2025
-Última actualización: 25 de diciembre de 2025
+Última actualización: 16 de junio de 2026
 
-# 🔄 Pipeline Async – Diseño Completo (Bootstrap → Escalable)
+# 🔄 Pipeline Async – Diseño Completo (Escalable vía Arq+Redis)
 
 ## 🧠 Idea central
 
-> La API no hace el trabajo pesado.Solo orquesta y delega.
+> La API no hace el trabajo pesado. Solo orquesta y delega. El motor de fondo (`Arq`) se encarga del procesamiento usando una cola persistente (`Redis`).
 > 
 
 ---
@@ -17,154 +17,129 @@ Fecha de creación: 25 de diciembre de 2025
 ## 0️⃣ Estados del Job (base del sistema)
 
 ```
-queued
+pending
 processing
-extracting
-normalizing
-generating
-exporting
-done
+completed
 failed
-
 ```
 
-👉 Aunque al inicio no se muestre todos al cliente, **internamente sí existen**.
+👉 Inicialmente el Job se crea como `pending`. A medida que Arq lo toma pasa a `processing`. Si falla, pasa a `failed`.
 
 ---
 
 ## 1️⃣ Creación del Job (API Layer)
 
-### POST `/jobs`
+### POST `/jobs`
 
-**Qué pasa internamente**
+**Qué pasa internamente (vía `JobService`)**
 
-1. Se validas:
-    - URL
-    - Plan
-    - Rate limit
-2. Creas registro `Job` en DB:
-    
+1. Se validan:
+    - URL (SSRF protection).
+    - Créditos suficientes del usuario.
+    - Prevención de duplicados recientes.
+2. Se crea un registro `Job` a través del `JobRepository`:
     ```json
     {
-    "status":"queued",
-    "progress":0
+      "status": "pending",
+      "progress": 0
     }
-    
     ```
+3. Se resta un crédito al usuario.
+4. Se encola la ejecución en Redis mediante el `QueueService`:
+    ```python
+    await self.queue_service.enqueue_job("execute_pipeline", job.id)
+    ```
+5. Se devuelve el Job al cliente (quien puede hacer polling).
+
+📌 **Las rutas y el servicio nunca procesan HTML aquí**.
+
+---
+
+## 2️⃣ Orquestación async (Redis + Arq Worker)
+
+En el script `app/worker.py` corre de manera independiente el proceso de `Arq`.
+La tarea registrada es `execute_pipeline(ctx, job_id)` que llama internamente al `PipelineService`.
+
+✔ Escalabilidad: Puedes levantar N workers conectando al mismo Redis.
+✔ Persistencia: Si la API cae, los jobs encolados no se pierden.
+✔ Manejo de errores integrados y reintentos (retry) configurables en Arq.
+
+---
+
+## 3️⃣ PipelineService.execute(job_id)
+
+El orquestador en segundo plano (dentro del worker). No conoce HTTP.
+
+```python
+async def execute(self, job_id: str):
+    self._update_progress(job, 10, "processing")
     
-3. Se devuelve `202 Accepted`
-4. Se encola ejecución async
-
-📌 **Nunca procesesar aquí**
-
----
-
-## 2️⃣ Orquestación async (Bootstrap)
-
-### Opción inicial (sin cola)
-
-```python
-bg.add_task(run_pipeline, job_id)
-
+    # 1. Extraction
+    content = self.extract_service.extract(url)
+    
+    # 2. Epub Generation
+    epub_bytes = self.epub_service.generate(content)
+    
+    # 3. Storage
+    file_id = self.storage_service.store_b2(epub_bytes)
+    self.file_repo.add(File(...))
+    
+    # 4. Cloud Connections Exports (Drive, Dropbox, OneDrive)
+    self._export_to_connected_clouds(...)
 ```
 
-✔ Cero coste
-
-❌ Si el server cae, se pierde jobs
-
-👉 Aceptable para early adopters / uso personal.
-
 ---
 
-## 3️⃣ run_pipeline(job_id)
+## 4️⃣ Paso 1: Extraction & Normalization
 
-Este método **nunca expone lógica HTTP**.
-
-```python
-defrun_pipeline(job_id):
-    extract(job_id)
-    normalize(job_id)
-    generate(job_id)
-    export(job_id)
-
-```
-
-Pero con **manejo de errores y estado**.
-
----
-
-## 4️⃣ Paso 1: Extract (Reader Mode)
-
-**Estado:** `extracting`
+**Servicios involucrados:** `ExtractService`, `NormalizeService`.
 
 ### Qué hace
 
-- Descarga HTML
-- Aplica Reader Mode
-- Extrae:
-    - Título
-    - Autor
-    - HTML limpio
-    - Texto plano
-
-### Guardas:
-
-- HTML normalizado
-- Metadatos
-
-📌 Guardar HTML intermedio **es clave** para debug.
+- Descarga HTML (con `httpx` de forma asíncrona).
+- Aplica algoritmos tipo Reader Mode (e.g. `readability-lxml`).
+- Limpia HTML, sanitiza iframes, scripts y estilos sucios.
+- Extrae metadatos (Título, Autor, Length).
 
 ---
 
-## 5️⃣ Paso 2: Normalize (HTML → ePub-ready)
+## 5️⃣ Paso 2: Generate (ePub)
 
-**Estado:** `normalizing`
+**Servicio involucrado:** `EpubService`.
 
 ### Qué hace
 
-- Limpiar etiquetas
-- Arreglar:
-    - Imágenes
-    - Encabezados
-    - Links
-- Insertar CSS base
-- Detectar idioma
+- Usa librerías internas (como `ebooklib` o similares) para empaquetar el contenido limpio.
+- Adjunta cover básico y tabla de contenidos (TOC).
 
-📌 Aquí se gana calidad de producto.
+📦 Output temporal en memoria:
+- `Bytes` del EPUB.
 
 ---
 
-## 6️⃣ Paso 3: Generate (ePub)
+## 6️⃣ Paso 3: Storage (Backblaze B2)
 
-**Estado:** `generating`
+**Servicio involucrado:** `StorageService`.
 
-### Qué hace
+El archivo binario no se guarda en PostgreSQL. Se sube a B2 usando `boto3`.
 
-- Generar ePub
-- Metadata:
-    - title
-    - author
-    - lang
-- Portada básica (opcional)
-
-📦 Output:
-
-- `book.epub`
+- Se devuelve un path genérico remoto.
+- Se crea la entidad `File` a través del `FileRepository`.
 
 ---
 
-## 7️⃣ Paso 4: Export
+## 7️⃣ Paso 4: Cloud Exports
 
-**Estado:** `exporting`
+**Servicio involucrado:** `CloudService`.
 
-### Opciones
-
+Si el usuario tiene conexiones registradas (`CloudConnectionRepository`):
 - Google Drive
-- Local download
+- Dropbox
+- OneDrive
 
-📌 El export **no afecta la generación**
+El `CloudService` toma los bytes del EPUB y los sube a las carpetas configuradas usando los `access_token` correspondientes.
 
-Si falla → se puede reintentar solo este paso.
+📌 El export **no rompe la conversión**. Si Dropbox falla por token inválido, se loguea (JSON Logger), pero el Job se marca como `completed` porque el archivo en B2 ya existe.
 
 ---
 
@@ -173,101 +148,41 @@ Si falla → se puede reintentar solo este paso.
 ### Success
 
 ```json
-status ="done"
-progress =100
-
+status = "completed"
+progress = 100
 ```
 
 ### Failure
 
+Cualquier excepción grave en el pipeline de `Arq` es atrapada. El job se marca como `failed` guardando el error.
+
 ```json
-status ="failed"
-error ="EXPORT_FAILED"
-
+status = "failed"
+error_message = "URL_NOT_REACHABLE"
 ```
-
-📌 Job siempre termina en estado final.
 
 ---
 
-# 🧱 Separación de responsabilidades (Clean)
+# 🧱 Separación de responsabilidades (Clean Architecture)
 
 ```
-Application
- ├──JobOrchestrator
- ├──ExtractService
- ├──NormalizeService
- ├──GenerateService
- └──ExportService
-
+app/services/
+ ├── PipelineService (Orquesta el Worker)
+ ├── JobService (Orquesta la API y encola)
+ ├── QueueService (Abstracción sobre Arq/Redis)
+ ├── ExtractService (Descarga y limpia)
+ ├── EpubService (Generador del binario)
+ ├── StorageService (S3 / B2)
+ └── CloudService (Drive / Dropbox)
 ```
 
 👉 Cada paso:
-
-- Input claro
-- Output claro
-- Idempotente (ideal)
-
----
-
-## 🛡️ Manejo de errores (MUY importante)
-
-| Error | Acción |
-| --- | --- |
-| URL inválida | fail inmediato |
-| Timeout | retry |
-| HTML vacío | fail |
-| Export falla | retry export |
-| ePub corrupto | fail |
-
-📌 Guardar siempre:
-
-- stacktrace
-- step
-- input
+- Tiene inputs/outputs claros.
+- Es independiente.
+- Tiene tests unitarios.
 
 ---
 
-## 📊 Progreso (%)
+# 💡 Decisión clave de escalabilidad
 
-| Paso | Progreso |
-| --- | --- |
-| queued | 0 |
-| extracting | 25 |
-| normalizing | 50 |
-| generating | 75 |
-| exporting | 90 |
-| done | 100 |
-
----
-
-# 🚀 Evolución natural (cuando crezca)
-
-## Versión con cola (misma lógica)
-
-```
-API → Queue → Worker
-
-```
-
-Cada paso:
-
-- Puede ser un task
-- O pipeline completo
-
-Ejemplo:
-
-```python
-@worker.task
-defprocess_job(job_id):
-    run_pipeline(job_id)
-
-```
-
-📌 **No cambia dominio**, solo infraestructura.
-
----
-
-# 💡 Decisión clave de bajo coste
-
-👉 **Un pipeline monolítico bien diseñado es mejor que microservicios pobres**
+👉 **Usar Arq sobre Celery:** Arq es nativo en `asyncio`, ligero, rápido y no necesita dependencias inmensas. Perfecto para este flujo basado en I/O.

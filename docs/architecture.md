@@ -3,7 +3,7 @@
 Tipo: Arquitectura
 Estado: Completado
 Fecha de creación: 25 de diciembre de 2025
-Última actualización: 25 de diciembre de 2025
+Última actualización: 16 de junio de 2026
 
 # 🧠 Principios base (importantes)
 
@@ -17,7 +17,7 @@ Antes de tecnología, 5 reglas que vamos a seguir:
 
 ---
 
-# 🏗️ Arquitectura SaaS – Fase Bootstrap (0–50€ / mes)
+# 🏗️ Arquitectura SaaS – Fase Actual
 
 ## Vista general
 
@@ -26,25 +26,31 @@ Antes de tecnología, 5 reglas que vamos a seguir:
    │
    ▼
 [ FastAPI ]
-   ├── Auth + API
-   ├── Orquestador
-   └── Background Tasks
+   ├── Auth + API Routes (IO Controllers)
+   └── Dependency Injection (services.py)
           │
           ▼
-[ Processor ]
-   ├── Reader Mode
-   ├── HTML Normalizer
-   ├── ePub Generator
-   └── Exporters (Drive)
+[ Services (Clean Architecture) ]
+   ├── AuthService, UserService
+   ├── JobService, IntentionService
+   ├── UploadService, PipelineService
+   └── Exporters (Drive, Dropbox, OneDrive)
           │
           ▼
-[ Storage ]
-   ├── Local FS
-   └── Google Drive
+[ Domain / Repositories ]  <---> [ Worker (Arq + Redis) ]
+   ├── UserRepository               │
+   ├── JobRepository                ├── Reader Mode
+   ├── IntentionRepository          ├── HTML Normalizer
+   └── CloudConnectionRepository    └── ePub Generator
+          │
+          ▼
+[ Storage & Data ]
+   ├── PostgreSQL (SQLAlchemy)
+   └── Backblaze B2 (Object Storage)
 
 ```
 
-👉 Todo corre **en un solo servidor** inicialmente.
+👉 La API delega trabajo pesado a **Arq** mediante **Redis**.
 
 ---
 
@@ -55,223 +61,128 @@ Antes de tecnología, 5 reglas que vamos a seguir:
 - **FastAPI**
 - **Python 3.12**
 - **Uvicorn**
-- **Pydantic v2**
+- **Pydantic v2 / Pydantic-Settings**
 
 ### Responsabilidades
 
-- Auth
-- Rate limiting
+- Auth (Google OAuth, JWT, Magic Links)
+- Rate limiting (`slowapi`)
 - API pública
-- Gestión de jobs
-- Webhooks futuros
+- Gestión de créditos (Intentions)
+- Encolamiento de jobs (vía `QueueService`)
 
-📌 Sin microservicios todavía.
+📌 La capa de rutas (`app/api/routes/`) no toca la base de datos directamente, todo se inyecta.
 
 ---
 
-## 2️⃣ Procesamiento async (sin Redis al inicio)
+## 2️⃣ Procesamiento async (Redis + Arq)
 
-### Opción 0-coste (inicial)
-
-Usar **BackgroundTasks** de FastAPI:
+Se implementó **Arq** apoyado por **Redis** para manejar las tareas en segundo plano garantizando persistencia y escalabilidad.
 
 ```python
-from fastapi import BackgroundTasks
-
-@router.post("/generate")
-def generate(cmd: GenerateCmd, bg: BackgroundTasks):
-    bg.add_task(process_url, cmd)
-    return {"status": "queued"}
-
+await self.queue_service.enqueue_job("execute_pipeline", job.id)
 ```
 
-✔ Cero infraestructura
-
-❌ No persistente si el server cae
-
-👉 Perfecto para MVP privado.
+✔ Escalable: Worker corre en proceso separado (`app/worker.py`).
+✔ Persistente: Los jobs no se pierden si el servidor API cae.
 
 ---
 
-### Evolución barata (cuando crezca)
-
-- **SQLite + RQ**
-- Redis en:
-    - Fly.io
-    - Railway
-    - Upstash (free tier)
-
-💡 **No se necesita el día 1.**
-
----
-
-## 3️⃣ Dominio (Clean Architecture)
+## 3️⃣ Dominio y Clean Architecture
 
 ```
-/domain
-  ├── entities
-  │   ├── Article
-  │   ├── Book
-  │   └── Job
-  ├── services
-  │   ├── ReaderService
-  │   └── EpubService
-  └── ports
-      ├── StoragePort
-      └── ExportPort
-
+/app
+  ├── api/
+  │   ├── dependencies/ (Inyección de dependencias)
+  │   └── routes/       (Controladores HTTP)
+  ├── core/             (Configuración, JSON Logging, Security)
+  ├── domain/
+  │   ├── models/       (SQLAlchemy)
+  │   ├── repositories/ (Aislamiento de DB)
+  │   └── schemas/      (Pydantic)
+  └── services/         (Lógica de negocio pura)
 ```
 
 Ventaja:
-
-- Cambias Drive → Kindle
-- Cambias EPUB → PDF
-- Sin tocar el core
+- Lógica de negocio (Services) es agnóstica a SQLAlchemy.
+- Testing unitario usando repositorios simulados (mocks) es trivial.
+- Cambiar de BD o añadir proveedores de la nube no afecta el Core.
 
 ---
 
-## 4️⃣ Base de datos (low cost)
+## 4️⃣ Base de datos
 
-### Inicio
-
-- **SQLite**
-- Archivo local
+- **PostgreSQL** mediante SQLAlchemy.
+- Aislado de los servicios mediante el **Patrón Repositorio**.
 
 Datos:
-
-- Usuarios
+- Users & Auth (incluye Cloud Connections)
 - Jobs
-- Estado
-- Metadatos
-
-### Futuro
-
-- Migrar a **PostgreSQL** sin dolor
+- Intentions (Créditos / Compras)
+- Files
 
 ---
 
 ## 5️⃣ Auth (simple pero segura)
 
-### MVP
+### Implementado
 
-- Email + magic link
-- OAuth Google (inicialmente necesario)
+- Email + Password (JWT)
+- OAuth Google (Sincroniza Drive)
+- Dropbox / OneDrive OAuth
+- Verificación de email y Reset de contraseña.
 
 Librerías:
-
-- `fastapi-users`
-- JWT corto
-- Refresh tokens simples
-
-📌 Evita passwords al inicio.
+- `passlib` (Argon2)
+- `python-jose` (JWT)
+- `google-auth-oauthlib`
 
 ---
 
 ## 6️⃣ Almacenamiento de archivos
 
-### Fase 1
-
-- **Filesystem local**
-- Limpieza con cron interno
-
-### Fase 2
-
-- Google Drive del usuario
-- S3-compatible cuando haya dinero
+- **Backblaze B2**: Sistema de almacenamiento principal de objetos compatible con S3.
+- **Exportaciones externas**: El usuario puede vincular Google Drive, Dropbox y OneDrive para mandar copias automáticas.
 
 ---
 
-## 7️⃣ API pública (pensada para extensiones)
+## 7️⃣ API pública
 
 ```
 POST   /jobs
 GET    /jobs/{id}
-GET    /jobs/{id}/download
-
+GET    /jobs
+GET    /upload/download/{file_id}
+POST   /me/intentions (Compra de créditos)
 ```
 
-Estados:
-
-- queued
-- processing
-- done
-- failed
-
----
-
-## 8️⃣ Observabilidad (gratis)
-
-- Logs estructurados
-- Sentry (free tier)
-- Métricas básicas
-
-📌 Nada de Prometheus aún.
+Estados de un Job:
+- `pending`
+- `processing`
+- `completed`
+- `failed`
 
 ---
 
-## 9️⃣ Infraestructura barata
+## 8️⃣ Observabilidad y Logs
 
-### Recomendado
-
-- **Fly.io**
-- **Railway**
-- **Hetzner Cloud (5€ VPS)**
-
-👉 Hetzner gana en coste fijo bajo.
+- **JSON Logging estructurado:** Implementado en `app/core/logging.py` para compatibilidad máxima con Datadog o Elastic.
+- **Sentry SDK:** Integrado para capturar excepciones del dominio y errores de servidor no controlados.
 
 ---
 
-## 10️⃣ Seguridad mínima viable
+## 9️⃣ Infraestructura
 
-- Rate limit por IP
-- Límite de URLs por usuario
-- Sanitización HTML
-- Timeouts
-
----
-
-# 🔮 Evolución natural (cuando haya tracción)
-
-```
-[ API ]
-    |
-[ Queue ]
-    |
-[ Worker Pool ]
-
-```
-
-- Redis
-- Workers separados
-- Postgres
-- Stripe
-- Planes:
-    - Free: 5 artículos / mes
-    - Pro: ilimitado
-    - Team
+- Base de datos relacional (PostgreSQL)
+- Servidor caché y colas (Redis)
+- Storage (Backblaze B2)
+- Worker (Python Arq)
+- API (FastAPI)
 
 ---
 
-# 💰 Coste estimado inicial
+## 10️⃣ Seguridad
 
-| Recurso | Coste |
-| --- | --- |
-| VPS | 5–10 € |
-| Dominio | ya lo tienes |
-| Google API | gratis |
-| Sentry | gratis |
-| Redis | 0 € |
-
-➡️ **~10€ / mes**
-
----
-
-# 🧩 Decisión clave que te ahorra dinero
-
-👉 **NO microservicios**
-
-👉 **NO Kubernetes**
-
-👉 **NO colas distribuidas al inicio**
-
-Eso viene **cuando empiece a facturar**, no antes.
+- Limitación de tasa de solicitudes (Rate Limiting)
+- SSRF Protection: Las URLs a procesar se validan internamente bloqueando rangos IP locales y meta-endpoints (AWS/GCP metadata).
+- Pydantic-Settings centraliza los secretos desde el `.env`.
