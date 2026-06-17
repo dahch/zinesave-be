@@ -28,6 +28,19 @@ async def create_job_endpoint(
     job = await job_service.create_job(str(payload.url), user)
     return job
 
+from app.domain.schemas.job import JobCompositeCreate
+
+@router.post("/composite", response_model=JobResponse, status_code=202)
+@limiter.limit("10/minute")
+async def create_composite_job_endpoint(
+    payload: JobCompositeCreate,
+    request: Request,
+    user: User = Depends(get_current_user),
+    job_service: JobService = Depends(get_job_service)
+):
+    job = await job_service.create_composite_job([str(u) for u in payload.urls], payload.title, user)
+    return job
+
 @router.get("", response_model=JobListResponse)
 def get_jobs(
     page: int = Query(1, ge=1, description="Page number"),

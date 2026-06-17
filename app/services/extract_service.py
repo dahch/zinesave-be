@@ -27,13 +27,11 @@ HEADERS = {
     "Cache-Control": "max-age=0",
 }
 
-def extract_content(db: Session, job: Job):
+def fetch_and_extract(url: str) -> dict:
     #1 Download HTML
-    logger.info(f"Downloading HTML from {job.source_url}")
-    response = requests.get(job.source_url, headers=HEADERS, timeout=10)
+    logger.info(f"Downloading HTML from {url}")
+    response = requests.get(url, headers=HEADERS, timeout=10)
     response.raise_for_status()
-
-
 
     html = response.text
     
@@ -66,41 +64,51 @@ def extract_content(db: Session, job: Job):
     html = str(soup)
 
     #2 Extract Metadata (from RAW HTML)    
-    metadata = extract_metadata(html, job.source_url)
+    metadata = extract_metadata(html, url)
     
-    # Save Metadata as JobContent
-    meta_content = JobContent(
-        job_id=job.id,
-        step="metadata",
-        content_type="json",
-        content=json.dumps(metadata)
-    )
-    db.add(meta_content)
-
     #3 Reader mode
     doc = Document(html)
     cleaned_html = doc.summary(html_partial=True)
     title = doc.short_title()
     logger.info(f"Extracted content for {title}")
 
-    #3 Save extracted content
-    content = JobContent(
-        job_id=job.id,
-        step="extracted",
-        content_type="html",
-        content=cleaned_html
-    )
-
-    db.add(content)
-
-    #4 Update Job
-    job.current_step = "extracting"
-    job.progress = 25
-
-    db.commit()
+    # Ensure the title is in the HTML as an h1 so epub_service can find it
+    # and so the chapter has a proper title header in the EPUB.
+    soup_clean = BeautifulSoup(cleaned_html, "lxml")
+    if not soup_clean.find("h1"):
+        cleaned_html = f"<h1>{title}</h1>\n" + cleaned_html
 
     return {
         "title": title,
         "html": cleaned_html,
         "metadata": metadata
     }
+
+def extract_content(db: Session, job: Job):
+    result = fetch_and_extract(job.source_url)
+    
+    # Save Metadata as JobContent
+    meta_content = JobContent(
+        job_id=job.id,
+        step="metadata",
+        content_type="json",
+        content=json.dumps(result["metadata"])
+    )
+    db.add(meta_content)
+
+    # Save extracted content
+    content = JobContent(
+        job_id=job.id,
+        step="extracted",
+        content_type="html",
+        content=result["html"]
+    )
+    db.add(content)
+
+    # Update Job
+    job.current_step = "extracting"
+    job.progress = 25
+
+    db.commit()
+
+    return result

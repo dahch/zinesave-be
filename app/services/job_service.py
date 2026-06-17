@@ -84,6 +84,43 @@ class JobService:
 
         return job
 
+    async def create_composite_job(self, urls: List[str], title: str, current_user: User) -> Job:
+        max_urls = 10 if current_user.plan == "pro" else 4
+        if len(urls) > max_urls:
+            raise ValueError(f"You can only submit up to {max_urls} urls in your current plan.")
+        if not urls:
+            raise ValueError("At least one URL is required.")
+
+        if current_user.credits <= 0:
+            raise ValueError("INSUFFICIENT_CREDITS")
+
+        safe_urls = [self.validate_url(url) for url in urls]
+
+        job = Job(
+            source_url=f"composite:{title}",
+            base_url="composite",
+            user_id=current_user.id
+        )
+        job = self.job_repo.add(job)
+
+        import json
+        from app.domain.models.job_content import JobContent
+        content = JobContent(
+            job_id=job.id,
+            step="composite_meta",
+            content_type="json",
+            content=json.dumps({"urls": safe_urls, "title": title})
+        )
+        self.job_repo.add_content(content)
+
+        current_user.credits -= 1
+        self.user_repo.update(current_user)
+
+        await self.queue_service.enqueue_job("execute_pipeline", job.id)
+
+        return job
+
+
     def get_jobs(self, user: User, page: int, per_page: int) -> Dict[str, Any]:
         offset = (page - 1) * per_page
         jobs, total = self.job_repo.get_user_jobs_paginated(user.id, offset, per_page)

@@ -21,19 +21,42 @@ logger = logging.getLogger(__name__)
 
 def generate_epub(db: Session, job: Job):
     logger.info(f"Generating EPUB for job {job.id}")
-    # 1 Get normalized html
-    normalized = (
-        db.query(JobContent)
-        .filter(
+    
+    is_composite = (job.base_url == "composite")
+    
+    # 1 Get normalized html(s)
+    if is_composite:
+        contents = db.query(JobContent).filter(
             JobContent.job_id == job.id,
-            JobContent.step == "normalized",
-            JobContent.content_type == "html",
+            JobContent.step.like("normalized_%"),
+            JobContent.content_type == "html"
+        ).all()
+        if not contents:
+            raise ValueError("No normalized html found for composite job")
+        
+        normalized_contents = sorted(contents, key=lambda c: int(c.step.split("_")[1]))
+        
+        meta_content = db.query(JobContent).filter(
+            JobContent.job_id == job.id,
+            JobContent.step == "composite_meta"
+        ).first()
+        urls = json.loads(meta_content.content).get("urls", []) if meta_content else []
+    else:
+        normalized = (
+            db.query(JobContent)
+            .filter(
+                JobContent.job_id == job.id,
+                JobContent.step == "normalized",
+                JobContent.content_type == "html",
+            )
+            .first()
         )
-        .first()
-    )
 
-    if not normalized:
-        raise ValueError("No normalized html found for job")
+        if not normalized:
+            raise ValueError("No normalized html found for job")
+        
+        normalized_contents = [normalized]
+        urls = [job.source_url]
     
     # 2. Get Metadata (Stored JSON)
     meta_record = (
@@ -50,21 +73,18 @@ def generate_epub(db: Session, job: Job):
         metadata = json.loads(meta_record.content)
     else:
         # Fallback if old job or missing
-        html_with_images, _ = process_images(normalized.content, job.source_url)
-        metadata = extract_metadata(html_with_images, job.source_url)
+        html_with_images, _ = process_images(normalized_contents[0].content, urls[0])
+        metadata = extract_metadata(html_with_images, urls[0])
 
     # 3 Create epub
     book = epub.EpubBook()
 
-    html_with_images, images = process_images(normalized.content, job.source_url)
-    # metadata = extract_metadata(html_with_images, job.source_url) <-- REMOVED
-
     book.set_title(metadata["title"])
-    book.set_language(metadata["language"])
-    book.add_author(metadata["author"])
-    book.add_metadata("DC", "publisher", metadata["publisher"])
-    book.add_metadata("DC", "date", metadata["published"])
-    book.add_metadata("DC", "source", metadata["source"])
+    book.set_language(metadata.get("language", "en"))
+    book.add_author(metadata.get("author", "Unknown"))
+    book.add_metadata("DC", "publisher", metadata.get("publisher", ""))
+    book.add_metadata("DC", "date", metadata.get("published", ""))
+    book.add_metadata("DC", "source", metadata.get("source", ""))
 
     book.set_identifier(job.id)
 
@@ -77,25 +97,37 @@ def generate_epub(db: Session, job: Job):
 
     book.set_cover("cover.jpg", cover_bytes.getvalue())
 
-    # 3 Add chapter
-    chapter = epub.EpubHtml(
-        title=metadata["title"],
-        file_name="chapter_1.xhtml",
-        lang=metadata["language"],
-    )
-    chapter.content = html_with_images
+    chapters = []
+    all_images = []
+    
+    from bs4 import BeautifulSoup
+    for i, norm in enumerate(normalized_contents):
+        url = urls[i] if i < len(urls) else job.source_url
+        html_with_images, images = process_images(norm.content, url)
+        
+        soup = BeautifulSoup(html_with_images, "lxml")
+        h1 = soup.find("h1")
+        ch_title = h1.text if h1 else f"Chapter {i+1}"
+        
+        chapter = epub.EpubHtml(
+            title=ch_title,
+            file_name=f"chapter_{i+1}.xhtml",
+            lang=metadata.get("language", "en"),
+        )
+        chapter.content = html_with_images
+        chapters.append(chapter)
+        all_images.extend(images)
 
-    # 4 Add chapter to book
-    book.add_item(chapter)
+    # 4 Add chapters and images to book
+    for chapter in chapters:
+        book.add_item(chapter)
 
-    for img in images:
+    for img in all_images:
         book.add_item(img)
 
     # 5 TOC + Spine
-    book.toc = (
-        epub.Link("chapter_1.xhtml", metadata["title"], "chapter"),
-    )
-    book.spine = ["nav", chapter]
+    book.toc = tuple(epub.Link(f"chapter_{i+1}.xhtml", ch.title, f"chapter_{i+1}") for i, ch in enumerate(chapters))
+    book.spine = ["nav"] + chapters
 
     # 6 Required files
     book.add_item(epub.EpubNcx())

@@ -18,25 +18,11 @@ img {
 }
 """
 
-def normalize_html(db: Session, job: Job):
-    # 1 Get extracted html
-    extracted = (
-        db.query(JobContent)
-        .filter(
-            JobContent.job_id == job.id,
-            JobContent.step == "extracted",
-            JobContent.content_type == "html"
-        )
-        .first()
-    )
-
-    if not extracted:
-        raise Exception("Extracted content not found")
-    
-    soup = BeautifulSoup(extracted.content, "lxml")
+def process_html_normalization(html: str) -> dict:
+    soup = BeautifulSoup(html, "lxml")
 
     # 2 Remove trash
-    for tag in soup (["script", "style", "iframe", "noscript"]):
+    for tag in soup(["script", "style", "iframe", "noscript"]):
         tag.decompose()
 
     # 3 Normalize headings (only one h1)
@@ -72,14 +58,35 @@ def normalize_html(db: Session, job: Job):
     style.string = BASE_CSS
     head.append(style)
 
-    normalize_html = str(soup)
+    return {
+        "html": str(soup),
+        "language": language,
+        "word_count": word_count
+    }
+
+def normalize_html(db: Session, job: Job):
+    # 1 Get extracted html
+    extracted = (
+        db.query(JobContent)
+        .filter(
+            JobContent.job_id == job.id,
+            JobContent.step == "extracted",
+            JobContent.content_type == "html"
+        )
+        .first()
+    )
+
+    if not extracted:
+        raise Exception("Extracted content not found")
+    
+    result = process_html_normalization(extracted.content)
 
     # 7 Save normalized content
     content = JobContent(
         job_id=job.id,
         step="normalized",
         content_type="html",
-        content=normalize_html
+        content=result["html"]
     )
 
     db.add(content)
@@ -91,6 +98,6 @@ def normalize_html(db: Session, job: Job):
     db.commit()
 
     return {
-        "language": language,
-        "word_count": word_count
+        "language": result["language"],
+        "word_count": result["word_count"]
     }

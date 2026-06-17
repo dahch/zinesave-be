@@ -2,6 +2,7 @@ from typing import Optional, List, Tuple
 from sqlalchemy.orm import Session
 from app.domain.repositories.base import BaseRepository
 from app.domain.models.job import Job
+from app.domain.models.job_content import JobContent
 from datetime import datetime, timezone, timedelta
 
 class JobRepository(BaseRepository[Job]):
@@ -31,3 +32,9 @@ class JobRepository(BaseRepository[Job]):
 
     def get_recent_jobs(self, user_id: int, limit: int = 5) -> List[Job]:
         return self.db.query(Job).filter(Job.user_id == user_id).order_by(Job.created_at.desc()).limit(limit).all()
+
+    def add_content(self, job_content: JobContent) -> JobContent:
+        self.db.add(job_content)
+        self.db.commit()
+        self.db.refresh(job_content)
+        return job_content
