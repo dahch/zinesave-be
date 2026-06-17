@@ -14,7 +14,10 @@ class IntentionService:
         existing = self.intention_repo.get_by_user_and_tier(user.id, data.tier_requested)
         if existing:
             return {
-                **existing.__dict__,
+                "id": existing.id,
+                "user_id": existing.user_id,
+                "tier_requested": existing.tier_requested,
+                "clicked_at": existing.clicked_at,
                 "reward_granted": False
             }
 
@@ -29,6 +32,9 @@ class IntentionService:
         self.user_repo.update(user)
 
         return {
-            **new_intention.__dict__,
+            "id": new_intention.id,
+            "user_id": new_intention.user_id,
+            "tier_requested": new_intention.tier_requested,
+            "clicked_at": new_intention.clicked_at,
             "reward_granted": True
         }
