@@ -34,9 +34,10 @@ async def test_run_retention_cleanup_error(mock_sentry, mock_retention_service):
 
 
 @pytest.mark.asyncio
+@patch("app.worker.settings")
 @patch("app.worker.sentry_sdk")
-async def test_worker_settings(mock_sentry, monkeypatch):
-    monkeypatch.setenv("SENTRY_DSN", "http://dummy@localhost/1")
+async def test_worker_settings(mock_sentry, mock_settings):
+    mock_settings.SENTRY_DSN = "http://dummy@localhost/1"
     settings = WorkerSettings()
     await settings.on_startup()
     await settings.on_shutdown()
