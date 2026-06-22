@@ -54,7 +54,6 @@ jobs:
         DROPBOX_CLIENT_SECRET: "dummy"
         ONEDRIVE_CLIENT_ID: "dummy"
         ONEDRIVE_CLIENT_SECRET: "dummy"
-        SENTRY_DSN: "http://dummy@localhost/1"
         # We also need these if pydantic requires them, or just let them fallback
       run: |
         # Run tests and fail if coverage is under 70%
