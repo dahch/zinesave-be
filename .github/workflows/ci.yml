@@ -30,6 +30,15 @@ jobs:
         ruff check .
 
     - name: Test with pytest and require 70% coverage
+      env:
+        FRONTEND_URL: "http://localhost:3000"
+        BACKEND_URL: "http://localhost:8000"
+        DATABASE_URL: "sqlite:///./test.db"
+        GOOGLE_CLIENT_ID: "dummy"
+        GOOGLE_CLIENT_SECRET: "dummy"
+        GOOGLE_PROJECT_ID: "dummy"
+        JWT_SECRET: "dummy_secret"
+        # We also need these if pydantic requires them, or just let them fallback
       run: |
         # Run tests and fail if coverage is under 70%
         # Assumes app/ is the main package directory
