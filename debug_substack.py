@@ -1,4 +1,3 @@
-
 import requests
 from bs4 import BeautifulSoup
 
@@ -17,7 +16,7 @@ soup = BeautifulSoup(response.text, "html.parser")
 images = soup.find_all("img")
 print(f"Found {len(images)} images.")
 
-for i, img in enumerate(images[:5]): # Print first 5
+for i, img in enumerate(images[:5]):  # Print first 5
     print(f"Image {i}: {img.attrs}")
 
 # Check specifically for the diagram

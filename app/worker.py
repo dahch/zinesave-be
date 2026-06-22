@@ -15,10 +15,11 @@ from app.services.retention_service import RetentionService
 
 logger = logging.getLogger(__name__)
 
+
 # Wrapper to inject DB session
 async def execute_pipeline(ctx, job_id: str):
     logger.info(f"Worker processing job {job_id}")
-    
+
     sentry_sdk.set_tag("job_id", job_id)
     sentry_sdk.set_context("job", {"job_id": job_id})
 
@@ -27,6 +28,7 @@ async def execute_pipeline(ctx, job_id: str):
     loop = asyncio.get_running_loop()
     await loop.run_in_executor(None, run_pipeline, job_id, SessionLocal)
     logger.info(f"Worker finished job {job_id}")
+
 
 async def run_retention_cleanup(ctx):
     """Periodic cleanup of expired files for free-tier users."""
@@ -37,6 +39,7 @@ async def run_retention_cleanup(ctx):
     except Exception as e:
         logger.exception("Retention cleanup failed")
         sentry_sdk.capture_exception(e)
+
 
 class WorkerSettings:
     functions = [execute_pipeline]
@@ -49,7 +52,7 @@ class WorkerSettings:
     # poll_delay=5 burns ~518K commands/month just from polling.
     # poll_delay=30 uses ~86K commands/month for polling.
     poll_delay = 30
-    
+
     async def on_startup(self):
         # Initialize Sentry for the worker process
         sentry_dsn = settings.SENTRY_DSN

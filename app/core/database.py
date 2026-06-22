@@ -11,13 +11,9 @@ engine = create_engine(
     # Keep pool small to avoid connection limit errors,
     # especially since the worker also opens sessions.
     pool_size=2,
-    max_overflow=3
+    max_overflow=3,
 )
 
-SessionLocal = sessionmaker(
-    autocommit=False,
-    autoflush=False,
-    bind=engine
-)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()

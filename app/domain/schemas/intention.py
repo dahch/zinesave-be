@@ -6,6 +6,7 @@ from pydantic import BaseModel
 class IntentionCreate(BaseModel):
     tier_requested: str
 
+
 class IntentionResponse(BaseModel):
     id: str
     user_id: str

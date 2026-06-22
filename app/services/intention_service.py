@@ -1,9 +1,11 @@
-from typing import Dict, Any
-from app.domain.models.user import User
+from typing import Any, Dict
+
 from app.domain.models.intention import PurchaseIntention
+from app.domain.models.user import User
 from app.domain.repositories.intention_repository import IntentionRepository
 from app.domain.repositories.user_repository import UserRepository
 from app.domain.schemas.intention import IntentionCreate
+
 
 class IntentionService:
     def __init__(self, intention_repo: IntentionRepository, user_repo: UserRepository):
@@ -18,13 +20,10 @@ class IntentionService:
                 "user_id": existing.user_id,
                 "tier_requested": existing.tier_requested,
                 "clicked_at": existing.clicked_at,
-                "reward_granted": False
+                "reward_granted": False,
             }
 
-        new_intention = PurchaseIntention(
-            user_id=user.id,
-            tier_requested=data.tier_requested
-        )
+        new_intention = PurchaseIntention(user_id=user.id, tier_requested=data.tier_requested)
         new_intention = self.intention_repo.add(new_intention)
 
         # Reward 5 credits
@@ -36,5 +35,5 @@ class IntentionService:
             "user_id": new_intention.user_id,
             "tier_requested": new_intention.tier_requested,
             "clicked_at": new_intention.clicked_at,
-            "reward_granted": True
+            "reward_granted": True,
         }

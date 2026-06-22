@@ -14,10 +14,11 @@ class Login(BaseModel):
     email: str
     password: str
 
+
 class ForgotPassword(BaseModel):
     email: str
+
 
 class ResetPassword(BaseModel):
     token: str
     new_password: str
-

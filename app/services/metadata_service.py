@@ -13,7 +13,7 @@ def extract_metadata(html: str, url: str) -> dict:
         else:
             tag = soup.find("meta", attrs={"property": prop})
         return tag["content"].strip() if tag and tag.get("content") else None
-    
+
     # 1. Title Strategy
     title = (
         meta(prop="og:title")
@@ -26,7 +26,7 @@ def extract_metadata(html: str, url: str) -> dict:
         h1 = soup.find("h1")
         if h1:
             title = h1.get_text(strip=True)
-    
+
     if not title:
         title = "Untitled Article"
 
@@ -56,5 +56,5 @@ def extract_metadata(html: str, url: str) -> dict:
         "language": lang or "en",
         "published": published,
         "publisher": meta(prop="og:site_name") or "DahchApp",
-        "source": urlparse(url).netloc
+        "source": urlparse(url).netloc,
     }

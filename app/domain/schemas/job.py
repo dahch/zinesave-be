@@ -6,9 +6,11 @@ from pydantic import BaseModel, HttpUrl
 class JobCreate(BaseModel):
     url: HttpUrl
 
+
 class JobCompositeCreate(BaseModel):
     urls: list[HttpUrl]
     title: str
+
 
 class JobResponse(BaseModel):
     id: str
@@ -20,6 +22,7 @@ class JobResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
 
 class JobListResponse(BaseModel):
     jobs: list[JobResponse]

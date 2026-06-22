@@ -8,6 +8,7 @@ class UserUpdate(BaseModel):
     country: str | None = None
     vat_number: str | None = None
 
+
 class UserResponse(BaseModel):
     id: str
     email: str

@@ -1,7 +1,7 @@
 import ipaddress
 import logging
 import socket
-from typing import Tuple, List, Dict, Any
+from typing import Any, Dict, List
 from urllib.parse import urlparse
 
 from app.domain.models.job import Job
@@ -23,8 +23,11 @@ BLOCKED_RANGES = [
     ipaddress.ip_network("fe80::/10"),
 ]
 
+
 class JobService:
-    def __init__(self, job_repo: JobRepository, user_repo: UserRepository, queue_service: QueueService):
+    def __init__(
+        self, job_repo: JobRepository, user_repo: UserRepository, queue_service: QueueService
+    ):
         self.job_repo = job_repo
         self.user_repo = user_repo
         self.queue_service = queue_service
@@ -33,7 +36,9 @@ class JobService:
         parsed = urlparse(str(url))
 
         if parsed.scheme not in ("http", "https"):
-            raise ValueError(f"Invalid URL scheme: {parsed.scheme}. Only HTTP and HTTPS are allowed.")
+            raise ValueError(
+                f"Invalid URL scheme: {parsed.scheme}. Only HTTP and HTTPS are allowed."
+            )
 
         hostname = parsed.hostname
         if not hostname:
@@ -70,11 +75,7 @@ class JobService:
         parsed = urlparse(safe_url)
         base_url = f"{parsed.scheme}://{parsed.netloc}"
 
-        job = Job(
-            source_url=safe_url,
-            base_url=base_url,
-            user_id=current_user.id
-        )
+        job = Job(source_url=safe_url, base_url=base_url, user_id=current_user.id)
         job = self.job_repo.add(job)
 
         current_user.credits -= 1
@@ -96,20 +97,18 @@ class JobService:
 
         safe_urls = [self.validate_url(url) for url in urls]
 
-        job = Job(
-            source_url=f"composite:{title}",
-            base_url="composite",
-            user_id=current_user.id
-        )
+        job = Job(source_url=f"composite:{title}", base_url="composite", user_id=current_user.id)
         job = self.job_repo.add(job)
 
         import json
+
         from app.domain.models.job_content import JobContent
+
         content = JobContent(
             job_id=job.id,
             step="composite_meta",
             content_type="json",
-            content=json.dumps({"urls": safe_urls, "title": title})
+            content=json.dumps({"urls": safe_urls, "title": title}),
         )
         self.job_repo.add_content(content)
 
@@ -120,11 +119,10 @@ class JobService:
 
         return job
 
-
     def get_jobs(self, user: User, page: int, per_page: int) -> Dict[str, Any]:
         offset = (page - 1) * per_page
         jobs, total = self.job_repo.get_user_jobs_paginated(user.id, offset, per_page)
-        
+
         return {
             "jobs": jobs,
             "total": total,

@@ -16,7 +16,7 @@ class GoogleDriveAdapter(CloudStorageAdapter):
             refresh_token=connection.refresh_token,
             token_uri="https://oauth2.googleapis.com/token",
             client_id=settings.GOOGLE_CLIENT_ID,
-            client_secret=settings.GOOGLE_CLIENT_SECRET
+            client_secret=settings.GOOGLE_CLIENT_SECRET,
         )
 
         if creds.expired and creds.refresh_token:
@@ -29,24 +29,14 @@ class GoogleDriveAdapter(CloudStorageAdapter):
 
         service = build("drive", "v3", credentials=creds)
 
-        file_metadata = {
-            "name": file_path.split("/")[-1],
-            "mimeType": "application/epub+zip"
-        }
+        file_metadata = {"name": file_path.split("/")[-1], "mimeType": "application/epub+zip"}
 
-        media = MediaFileUpload(
-            file_path,
-            mimetype="application/epub+zip",
-            resumable=True
+        media = MediaFileUpload(file_path, mimetype="application/epub+zip", resumable=True)
+
+        file = (
+            service.files()
+            .create(body=file_metadata, media_body=media, fields="id, webViewLink")
+            .execute()
         )
 
-        file = service.files().create(
-            body=file_metadata,
-            media_body=media,
-            fields="id, webViewLink"
-        ).execute()
-
-        return {
-            "id": file.get("id"),
-            "url": file.get("webViewLink")
-        }
+        return {"id": file.get("id"), "url": file.get("webViewLink")}

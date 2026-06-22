@@ -18,8 +18,14 @@ from app.services.email_service import EmailService
 
 logger = logging.getLogger(__name__)
 
+
 class AuthService:
-    def __init__(self, user_repo: UserRepository, cloud_conn_repo: CloudConnectionRepository, email_service: EmailService):
+    def __init__(
+        self,
+        user_repo: UserRepository,
+        cloud_conn_repo: CloudConnectionRepository,
+        email_service: EmailService,
+    ):
         self.user_repo = user_repo
         self.cloud_conn_repo = cloud_conn_repo
         self.email_service = email_service
@@ -38,7 +44,7 @@ class AuthService:
             is_company=data.is_company,
             country=data.country,
             vat_number=data.vat_number,
-            is_verified=False
+            is_verified=False,
         )
 
         user = self.user_repo.add(user)
@@ -47,16 +53,20 @@ class AuthService:
         token = create_access_token(user)
         frontend_url = settings.FRONTEND_URL
         verification_link = f"{frontend_url}/verify?token={token}"
-        
+
         self.email_service.send_verification_email(user.email, verification_link)
         logger.info(f"Verification email sent to {user.email}")
-        
+
         return user
 
     def login_user(self, data) -> str:
         user = self.user_repo.get_by_email(data.email)
 
-        if not user or user.provider != "email" or not verify_password(data.password, user.password_hash):
+        if (
+            not user
+            or user.provider != "email"
+            or not verify_password(data.password, user.password_hash)
+        ):
             raise InvalidCredentialsException()
 
         if not user.is_verified:
@@ -84,7 +94,7 @@ class AuthService:
         user = self.user_repo.get_by_email(email)
         if not user or user.provider != "email":
             return
-        
+
         token = create_reset_token(user.email)
         frontend_url = settings.FRONTEND_URL
         reset_link = f"{frontend_url}/reset-password?token={token}"
@@ -94,19 +104,21 @@ class AuthService:
         email = verify_reset_token(data.token)
         if not email:
             raise InvalidTokenException()
-            
+
         user = self.user_repo.get_by_email(email)
         if not user:
             raise UserNotFoundException()
-            
+
         user.password_hash = hash_password(data.new_password)
         self.user_repo.update(user)
 
-    def resolve_oauth_user(self, email: str, name: str, provider_id: str, provider: str = "google") -> User:
+    def resolve_oauth_user(
+        self, email: str, name: str, provider_id: str, provider: str = "google"
+    ) -> User:
         user = self.user_repo.get_by_provider(provider, provider_id)
         if user:
             return user
-        
+
         # Fallback by email
         user = self.user_repo.get_by_email(email)
         if user and user.provider == "email":
@@ -127,15 +139,23 @@ class AuthService:
             provider=provider,
             provider_id=provider_id,
             plan="free",
-            is_verified=True
+            is_verified=True,
         )
         return self.user_repo.add(new_user)
 
-    def save_cloud_connection(self, user_id: int, provider: str, access_token: str, refresh_token: str = None, expiry = None, metadata: dict = None):
+    def save_cloud_connection(
+        self,
+        user_id: int,
+        provider: str,
+        access_token: str,
+        refresh_token: str = None,
+        expiry=None,
+        metadata: dict = None,
+    ):
         connection = self.cloud_conn_repo.get_by_user_and_provider(user_id, provider)
         if not connection:
             connection = CloudConnection(user_id=user_id, provider=provider)
-            
+
         connection.access_token = access_token
         if refresh_token:
             connection.refresh_token = refresh_token

@@ -1,10 +1,11 @@
+import logging
 from contextlib import asynccontextmanager
 
 import sentry_sdk
 from arq import create_pool
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
@@ -14,15 +15,16 @@ from app.core.config import settings
 from app.core.logging import setup_logging
 from app.core.queue import redis_settings
 from app.domain.exceptions import DomainException
-import logging
 
 logger = logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     app.state.redis = await create_pool(redis_settings)
     yield
     await app.state.redis.close()
+
 
 setup_logging()
 
@@ -37,9 +39,15 @@ if sentry_dsn:
 # Rate limiter using in-memory storage (no Redis needed, saves Upstash commands)
 limiter = Limiter(key_func=get_remote_address)
 
-app = FastAPI(title="Reader -> ePub", description="API for converting reader to epub", version="1.0.0", lifespan=lifespan)
+app = FastAPI(
+    title="Reader -> ePub",
+    description="API for converting reader to epub",
+    version="1.0.0",
+    lifespan=lifespan,
+)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 
 @app.exception_handler(DomainException)
 async def domain_exception_handler(request: Request, exc: DomainException):
@@ -48,6 +56,7 @@ async def domain_exception_handler(request: Request, exc: DomainException):
         status_code=exc.status_code,
         content={"message": exc.message},
     )
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -70,12 +79,15 @@ app.include_router(me.router)
 app.include_router(upload.router)
 app.include_router(intentions.router)
 
+
 @app.get("/")
 def healthcheck():
     return {"status": "ok"}
 
+
 # Only expose sentry-debug in non-production environments
 if settings.ENVIRONMENT != "production":
+
     @app.get("/sentry-debug")
     async def trigger_error():
-        division_by_zero = 1 / 0
+        raise Exception("Sentry debug error")

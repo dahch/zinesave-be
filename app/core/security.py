@@ -14,24 +14,28 @@ if not JWT_SECRET:
 
 JWT_EXP_MINUTES = 60
 
+
 def create_access_token(user):
     payload = {
         "sub": user.id,
         "email": user.email,
-        "plan":  user.plan,
-        "exp": datetime.now(timezone.utc) + timedelta(minutes=JWT_EXP_MINUTES)
+        "plan": user.plan,
+        "exp": datetime.now(timezone.utc) + timedelta(minutes=JWT_EXP_MINUTES),
     }
     return jwt.encode(payload, JWT_SECRET, algorithm="HS256")
 
+
 RESET_TOKEN_EXP_MINUTES = 15
+
 
 def create_reset_token(email: str) -> str:
     payload = {
         "sub": email,
         "type": "reset",
-        "exp": datetime.now(timezone.utc) + timedelta(minutes=RESET_TOKEN_EXP_MINUTES)
+        "exp": datetime.now(timezone.utc) + timedelta(minutes=RESET_TOKEN_EXP_MINUTES),
     }
     return jwt.encode(payload, JWT_SECRET, algorithm="HS256")
+
 
 def verify_reset_token(token: str) -> str | None:
     try:

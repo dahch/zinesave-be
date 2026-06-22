@@ -1,4 +1,3 @@
-
 # Brand Colors
 COLOR_PRIMARY = "#F59E0B"  # Orange/Gold
 COLOR_TEXT_MAIN = "#1F2937"  # Dark Gray/Slate 800
@@ -12,7 +11,8 @@ COLOR_BUTTON_TEXT = "#FFFFFF"
 # causes Gmail to clip the message, breaking the HTML structure.
 # Please ensure this URL is publicly accessible.
 # You can replace this with f"{frontend_url}/logo.png" if you host it there.
-LOGO_URL = "https://zinesave.io/icon.png" 
+LOGO_URL = "https://zinesave.io/icon.png"
+
 
 def get_base_styles():
     # We remove the block style for the most part and will inline everything.
@@ -32,12 +32,13 @@ def get_base_styles():
     </style>
     """
 
+
 def create_verification_email(verification_link: str, frontend_url: str):
     """
     Creates the HTML content for the verification email.
     Uses inline CSS for maximum compatibility (Gmail, Outlook, etc.).
     """
-    
+
     # Inline Styles
     style_body = f"margin: 0; padding: 0; width: 100%; background-color: {COLOR_BG_BODY}; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%;"
     style_wrapper = f"width: 100%; background-color: {COLOR_BG_BODY}; padding: 40px 0;"
@@ -51,7 +52,9 @@ def create_verification_email(verification_link: str, frontend_url: str):
     style_link = f"color: {COLOR_PRIMARY}; word-break: break-all;"
     style_footer_link = f"color: {COLOR_TEXT_MUTED}; text-decoration: underline; margin: 0 8px;"
     style_logo_text = f"font-size: 24px; font-weight: bold; color: {COLOR_TEXT_MAIN}; vertical-align: middle; font-family: sans-serif;"
-    style_logo_img = "vertical-align: middle; height: 32px; width: auto; margin-right: 10px; border: 0;"
+    style_logo_img = (
+        "vertical-align: middle; height: 32px; width: auto; margin-right: 10px; border: 0;"
+    )
 
     # Header Content with Table for Alignment
     header_content = f"""
@@ -66,7 +69,7 @@ def create_verification_email(verification_link: str, frontend_url: str):
         </tr>
     </table>
     """
-    
+
     return f"""
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml">
@@ -130,6 +133,7 @@ def create_verification_email(verification_link: str, frontend_url: str):
 </html>
 """
 
+
 def create_reset_password_email(reset_link: str, frontend_url: str):
     """
     Creates the HTML content for the reset password email.
@@ -147,7 +151,9 @@ def create_reset_password_email(reset_link: str, frontend_url: str):
     style_link = f"color: {COLOR_PRIMARY}; word-break: break-all;"
     style_footer_link = f"color: {COLOR_TEXT_MUTED}; text-decoration: underline; margin: 0 8px;"
     style_logo_text = f"font-size: 24px; font-weight: bold; color: {COLOR_TEXT_MAIN}; vertical-align: middle; font-family: sans-serif;"
-    style_logo_img = "vertical-align: middle; height: 32px; width: auto; margin-right: 10px; border: 0;"
+    style_logo_img = (
+        "vertical-align: middle; height: 32px; width: auto; margin-right: 10px; border: 0;"
+    )
 
     header_content = f"""
     <table align="center" border="0" cellpadding="0" cellspacing="0" role="presentation" style="margin: 0 auto;">
@@ -223,4 +229,3 @@ def create_reset_password_email(reset_link: str, frontend_url: str):
 </body>
 </html>
 """
-

@@ -8,14 +8,16 @@ from app.services.upload_service import UploadService
 
 router = APIRouter(prefix="/jobs", tags=["Upload"])
 
+
 class UploadRequest(BaseModel):
-    provider: str # google_drive, dropbox, onedrive, all
+    provider: str  # google_drive, dropbox, onedrive, all
+
 
 @router.post("/{job_id}/upload")
 def upload_job_to_cloud(
     job_id: str,
     data: UploadRequest,
     user: User = Depends(get_current_user),
-    upload_service: UploadService = Depends(get_upload_service)
+    upload_service: UploadService = Depends(get_upload_service),
 ):
     return upload_service.upload_job_to_cloud(user, job_id, data.provider)

@@ -16,7 +16,9 @@ def migrate():
             # Check if columns exist to avoid errors if run multiple times
             # This is a basic check for PostgreSQL/SQLite compatibility
             try:
-                connection.execute(text("ALTER TABLE files ADD COLUMN is_deleted BOOLEAN DEFAULT FALSE"))
+                connection.execute(
+                    text("ALTER TABLE files ADD COLUMN is_deleted BOOLEAN DEFAULT FALSE")
+                )
                 print("- Added 'is_deleted' column.")
             except Exception as e:
                 print(f"- 'is_deleted' column might already exist or error: {e}")
@@ -28,6 +30,7 @@ def migrate():
                 print(f"- 'deleted_at' column might already exist or error: {e}")
 
     print("Migration completed.")
+
 
 if __name__ == "__main__":
     migrate()

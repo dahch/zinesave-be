@@ -14,31 +14,28 @@ from app.services.retention_service import RetentionService
 # Load environment variables
 load_dotenv()
 
+
 def setup_sentry():
     sentry_dsn = os.getenv("SENTRY_DSN")
     if sentry_dsn:
         sentry_sdk.init(
             dsn=sentry_dsn,
             send_default_pii=True,
-            integrations=[
-                LoggingIntegration(
-                    level=logging.INFO,
-                    event_level=logging.ERROR
-                )
-            ]
+            integrations=[LoggingIntegration(level=logging.INFO, event_level=logging.ERROR)],
         )
         print("Sentry initialized.")
     else:
         print("Sentry DSN not found. Skipping Sentry initialization.")
+
 
 def main():
     # Setup basic logging
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        handlers=[logging.StreamHandler(sys.stdout)]
+        handlers=[logging.StreamHandler(sys.stdout)],
     )
-    
+
     # Setup Sentry
     setup_sentry()
 
@@ -54,6 +51,7 @@ def main():
     except Exception as e:
         logger.error(f"Failed to run retention cleanup: {e}", exc_info=True)
         sys.exit(1)
+
 
 if __name__ == "__main__":
     main()

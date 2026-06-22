@@ -1,5 +1,6 @@
 class DomainException(Exception):
     """Base class for all domain-level exceptions."""
+
     def __init__(self, message: str, status_code: int = 400):
         super().__init__(message)
         self.message = message

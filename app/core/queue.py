@@ -14,7 +14,7 @@ if REDIS_URL:
     ssl_ca_certs = None
     if parsed.scheme == "rediss":
         ssl_ca_certs = certifi.where()
-        
+
     redis_settings = RedisSettings(
         host=parsed.hostname,
         port=parsed.port or 6379,
@@ -28,4 +28,3 @@ else:
         host=settings.REDIS_HOST,
         port=int(settings.REDIS_PORT),
     )
-

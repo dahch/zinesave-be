@@ -11,6 +11,7 @@ from app.services.url_utils import resolve_url
 
 logger = logging.getLogger(__name__)
 
+
 def process_images(html: str, base_url: str):
     soup = BeautifulSoup(html, "html.parser")
     image_items = []
@@ -19,8 +20,8 @@ def process_images(html: str, base_url: str):
         src = img.get("src")
         resolved = resolve_url(src, base_url)
         logger.debug(f"Processing image: {resolved}")
-        
-        #Data URI
+
+        # Data URI
         if resolved and resolved.startswith("data:image"):
             continue
 
@@ -35,11 +36,13 @@ def process_images(html: str, base_url: str):
             # Optimize Image with Pillow
 
             image_data = response.content
-            
+
             try:
                 with Image.open(io.BytesIO(image_data)) as pil_img:
                     # 1. Convert to RGB if necessary (except PNG with alpha)
-                    if pil_img.mode in ("RGBA", "LA") or (pil_img.mode == "P" and "transparency" in pil_img.info):
+                    if pil_img.mode in ("RGBA", "LA") or (
+                        pil_img.mode == "P" and "transparency" in pil_img.info
+                    ):
                         # Keep PNG for transparency
                         final_format = "PNG"
                         mime_type = "image/png"
@@ -56,18 +59,20 @@ def process_images(html: str, base_url: str):
                         ratio = max_width / pil_img.width
                         new_height = int(pil_img.height * ratio)
                         pil_img = pil_img.resize((max_width, new_height), Image.Resampling.LANCZOS)
-                    
+
                     # 3. Export to Bytes
                     output_buffer = io.BytesIO()
                     if final_format == "JPEG":
                         pil_img.save(output_buffer, format="JPEG", quality=85, optimize=True)
                     else:
                         pil_img.save(output_buffer, format="PNG", optimize=True)
-                    
+
                     optimized_content = output_buffer.getvalue()
 
             except Exception as img_err:
-                logger.warning(f"Image optimization failed for {resolved}, using original: {img_err}")
+                logger.warning(
+                    f"Image optimization failed for {resolved}, using original: {img_err}"
+                )
                 optimized_content = image_data
                 content_type = response.headers.get("Content-Type", "")
                 ext = content_type.split("/")[-1].split(";")[0] or "png"
@@ -80,15 +85,14 @@ def process_images(html: str, base_url: str):
             epub_image.media_type = mime_type
             epub_image.content = optimized_content
 
-
             image_items.append(epub_image)
 
-            #Overwrite src with epub path
+            # Overwrite src with epub path
             img["src"] = epub_image.file_name
 
         except Exception as e:
             logger.warning(f"Error handling image {resolved}: {str(e)}")
             # Fail silently: quality > crash
             img.decompose()
-    
+
     return str(soup), image_items

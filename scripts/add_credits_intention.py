@@ -20,26 +20,31 @@ def migrate():
                 print(f"- 'credits' column might already exist or error: {e}")
 
             try:
-                connection.execute(text("ALTER TABLE users ADD COLUMN is_beta_tester BOOLEAN DEFAULT TRUE"))
+                connection.execute(
+                    text("ALTER TABLE users ADD COLUMN is_beta_tester BOOLEAN DEFAULT TRUE")
+                )
                 print("- Added 'is_beta_tester' column to 'users' table.")
             except Exception as e:
                 print(f"- 'is_beta_tester' column might already exist or error: {e}")
-                
+
             try:
                 print("Creating 'purchase_intentions' table if it does not exist...")
-                connection.execute(text("""
+                connection.execute(
+                    text("""
                     CREATE TABLE IF NOT EXISTS purchase_intentions (
                         id VARCHAR PRIMARY KEY,
                         user_id VARCHAR NOT NULL REFERENCES users(id),
                         tier_requested VARCHAR NOT NULL,
                         clicked_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
                     )
-                """))
+                """)
+                )
                 print("- Created 'purchase_intentions' table.")
             except Exception as e:
                 print(f"- Error creating 'purchase_intentions' table: {e}")
 
     print("Migration completed.")
+
 
 if __name__ == "__main__":
     migrate()

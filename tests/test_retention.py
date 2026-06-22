@@ -21,13 +21,17 @@ class TestRetentionService(unittest.TestCase):
     @patch("app.services.retention_service.storage_service")
     def test_cleanup_expired_files(self, mock_storage):
         # Setup data
-        user_free = User(id="u1", plan="free")
-        job_old = Job(id="j1", user_id="u1", created_at=datetime.now(timezone.utc) - timedelta(days=200)) # > 6 months
+        User(id="u1", plan="free")
+        Job(
+            id="j1", user_id="u1", created_at=datetime.now(timezone.utc) - timedelta(days=200)
+        )  # > 6 months
         file_to_delete = File(id="f1", job_id="j1", path="s3_key_1", is_deleted=False)
-        
+
         # Mock DB query result
         # The query chain is complex, so we mock the final .all() return
-        self.mock_db.query.return_value.join.return_value.join.return_value.filter.return_value.all.return_value = [file_to_delete]
+        self.mock_db.query.return_value.join.return_value.join.return_value.filter.return_value.all.return_value = [
+            file_to_delete
+        ]
 
         # Execute
         self.service.cleanup_expired_files(dry_run=False)
@@ -45,7 +49,9 @@ class TestRetentionService(unittest.TestCase):
     def test_dry_run(self, mock_storage):
         # Setup data
         file_to_delete = File(id="f1", job_id="j1", path="s3_key_1", is_deleted=False)
-        self.mock_db.query.return_value.join.return_value.join.return_value.filter.return_value.all.return_value = [file_to_delete]
+        self.mock_db.query.return_value.join.return_value.join.return_value.filter.return_value.all.return_value = [
+            file_to_delete
+        ]
 
         # Execute
         self.service.cleanup_expired_files(dry_run=True)
@@ -56,6 +62,7 @@ class TestRetentionService(unittest.TestCase):
 
         # Assert NO Storage deletion
         mock_storage.delete_file.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

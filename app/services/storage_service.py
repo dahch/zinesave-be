@@ -8,6 +8,7 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
+
 class StorageService:
     def __init__(self):
         self.bucket = settings.B2_BUCKET_NAME
@@ -16,17 +17,14 @@ class StorageService:
             endpoint_url=settings.B2_ENDPOINT_URL,
             aws_access_key_id=settings.B2_KEY_ID,
             aws_secret_access_key=settings.B2_APPLICATION_KEY,
-            config=Config(signature_version="s3v4")
+            config=Config(signature_version="s3v4"),
         )
 
     def upload_file(self, file_obj, key: str, content_type: str = "application/epub+zip"):
         """Uploads a file-like object to B2."""
         try:
             self.s3_client.upload_fileobj(
-                file_obj,
-                self.bucket,
-                key,
-                ExtraArgs={"ContentType": content_type}
+                file_obj, self.bucket, key, ExtraArgs={"ContentType": content_type}
             )
             return key
         except ClientError as e:
@@ -37,9 +35,7 @@ class StorageService:
         """Generates a presigned URL for downloading a file."""
         try:
             response = self.s3_client.generate_presigned_url(
-                "get_object",
-                Params={"Bucket": self.bucket, "Key": key},
-                ExpiresIn=expiration
+                "get_object", Params={"Bucket": self.bucket, "Key": key}, ExpiresIn=expiration
             )
             return response
         except ClientError as e:
@@ -61,5 +57,6 @@ class StorageService:
         except ClientError as e:
             logger.error(f"Failed to delete file from B2: {e}")
             raise e
+
 
 storage_service = StorageService()

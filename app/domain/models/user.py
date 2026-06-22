@@ -16,13 +16,13 @@ class User(Base):
 
     password_hash = Column(String, nullable=True)
 
-    provider = Column(String, nullable=False)       # "google"
-    provider_id = Column(String, nullable=False)    # Google sub
+    provider = Column(String, nullable=False)  # "google"
+    provider_id = Column(String, nullable=False)  # Google sub
 
     plan = Column(String, default="free")
     credits = Column(Integer, default=5)
     is_beta_tester = Column(Boolean, default=True)
-    
+
     # Profile info
     is_company = Column(Boolean, default=False)
     country = Column(String, nullable=True)
