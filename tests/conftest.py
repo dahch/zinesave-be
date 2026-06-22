@@ -26,6 +26,7 @@ def mock_db():
 def user_repo(mock_db):
     repo = UserRepository(mock_db)
     repo.get_by_email = Mock(return_value=None)
+    repo.get_by_provider = Mock(return_value=None)
     repo.add = Mock(side_effect=lambda x: x)
     repo.update = Mock(side_effect=lambda x: x)
     return repo
@@ -41,7 +42,9 @@ def job_repo(mock_db):
     repo = JobRepository(mock_db)
     repo.get_recent_duplicate = Mock()
     repo.get_user_job = Mock()
+    repo.get_user_jobs_paginated = Mock()
     repo.add = Mock()
+    repo.add_content = Mock()
     repo.update = Mock()
     return repo
 
@@ -106,3 +109,26 @@ def job_service(job_repo, user_repo, queue_service):
 @pytest.fixture
 def upload_service(job_repo, file_repo, cloud_conn_repo, cloud_service):
     return UploadService(job_repo, file_repo, cloud_conn_repo, cloud_service)
+
+from fastapi.testclient import TestClient
+from app.main import app
+from app.api.dependencies.services import (
+    get_user_repo, get_job_repo, get_file_repo, 
+    get_cloud_conn_repo, get_email_service, get_queue_service
+)
+
+@pytest.fixture
+def client(user_repo, job_repo, file_repo, cloud_conn_repo, email_service, queue_service):
+    app.dependency_overrides[get_user_repo] = lambda: user_repo
+    app.dependency_overrides[get_job_repo] = lambda: job_repo
+    app.dependency_overrides[get_file_repo] = lambda: file_repo
+    app.dependency_overrides[get_cloud_conn_repo] = lambda: cloud_conn_repo
+    app.dependency_overrides[get_email_service] = lambda: email_service
+    app.dependency_overrides[get_queue_service] = lambda: queue_service
+    
+    # We mock limiter because TestClient does not trigger it properly, or it slows down tests
+    
+    with TestClient(app) as c:
+        yield c
+        
+    app.dependency_overrides.clear()

@@ -61,6 +61,7 @@ sentry-sdk
 mailersend
 
 slowapi==0.1.9
+httpx
 
 pytest==8.2.1
 pytest-cov==5.0.0
