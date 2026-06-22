@@ -28,8 +28,6 @@ async def create_job_endpoint(
     return job
 
 
-
-
 @router.post("/composite", response_model=JobResponse, status_code=202)
 @limiter.limit("10/minute")
 async def create_composite_job_endpoint(

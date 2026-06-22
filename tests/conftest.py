@@ -1,12 +1,22 @@
 from unittest.mock import AsyncMock, MagicMock, Mock
 
 import pytest
+from fastapi.testclient import TestClient
 
+from app.api.dependencies.services import (
+    get_cloud_conn_repo,
+    get_email_service,
+    get_file_repo,
+    get_job_repo,
+    get_queue_service,
+    get_user_repo,
+)
 from app.domain.repositories.cloud_connection_repository import CloudConnectionRepository
 from app.domain.repositories.file_repository import FileRepository
 from app.domain.repositories.intention_repository import IntentionRepository
 from app.domain.repositories.job_repository import JobRepository
 from app.domain.repositories.user_repository import UserRepository
+from app.main import app
 from app.services.auth_service import AuthService
 from app.services.cloud_service import CloudService
 from app.services.email_service import EmailService
@@ -110,12 +120,6 @@ def job_service(job_repo, user_repo, queue_service):
 def upload_service(job_repo, file_repo, cloud_conn_repo, cloud_service):
     return UploadService(job_repo, file_repo, cloud_conn_repo, cloud_service)
 
-from fastapi.testclient import TestClient
-from app.main import app
-from app.api.dependencies.services import (
-    get_user_repo, get_job_repo, get_file_repo, 
-    get_cloud_conn_repo, get_email_service, get_queue_service
-)
 
 @pytest.fixture
 def client(user_repo, job_repo, file_repo, cloud_conn_repo, email_service, queue_service):
@@ -125,10 +129,10 @@ def client(user_repo, job_repo, file_repo, cloud_conn_repo, email_service, queue
     app.dependency_overrides[get_cloud_conn_repo] = lambda: cloud_conn_repo
     app.dependency_overrides[get_email_service] = lambda: email_service
     app.dependency_overrides[get_queue_service] = lambda: queue_service
-    
+
     # We mock limiter because TestClient does not trigger it properly, or it slows down tests
-    
+
     with TestClient(app) as c:
         yield c
-        
+
     app.dependency_overrides.clear()
