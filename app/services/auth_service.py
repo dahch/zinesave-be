@@ -141,7 +141,12 @@ class AuthService:
             plan="free",
             is_verified=True,
         )
-        return self.user_repo.add(new_user)
+        user = self.user_repo.add(new_user)
+
+        self.email_service.send_welcome_email(user.email)
+        logger.info(f"Welcome email sent to {user.email}")
+
+        return user
 
     def save_cloud_connection(
         self,

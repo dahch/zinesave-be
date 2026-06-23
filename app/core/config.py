@@ -33,6 +33,7 @@ class Settings(BaseSettings):
 
     MAILERSEND_API_KEY: str | None = None
     MAILERSEND_FROM_EMAIL: str = "noreply@zinesave.io"
+    CONTACT_EMAIL: str = "support@zinesave.io"
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
