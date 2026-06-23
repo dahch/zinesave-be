@@ -3,7 +3,11 @@ import logging
 from mailersend import EmailContact, EmailRequest, MailerSendClient
 
 from app.core.config import settings
-from app.services.email_templates import create_reset_password_email, create_verification_email
+from app.services.email_templates import (
+    create_reset_password_email,
+    create_verification_email,
+    create_welcome_email,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -56,4 +60,23 @@ class EmailService:
             return response
         except Exception as e:
             logger.error(f"Error sending password reset email to {to_email}: {e}")
+            return None
+
+    def send_welcome_email(self, to_email: str):
+        email_body = create_welcome_email(self.frontend_url, settings.CONTACT_EMAIL)
+        text_body = f"Welcome to ZineSave! We're thrilled to have you on board. If you have any questions, reach out to us at {settings.CONTACT_EMAIL}."
+
+        try:
+            req = EmailRequest(
+                from_email=EmailContact(email=self.from_email, name="ZineSave"),
+                to=[EmailContact(email=to_email)],
+                subject="Welcome to ZineSave!",
+                html=email_body,
+                text=text_body,
+            )
+
+            response = self.client.emails.send(req)
+            return response
+        except Exception as e:
+            logger.error(f"Error sending welcome email to {to_email}: {e}")
             return None
