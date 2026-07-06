@@ -1,0 +1,1067 @@
+openapi: "3.1.0"
+info:
+  title: ZineSave API
+  version: "1.0.0"
+  description: Turn web articles into EPUBs. REST API for job creation, auth, and user management.
+
+servers:
+  - url: http://localhost:8000
+    description: Local development
+  - url: https://zinesave-be.fly.dev
+    description: Production
+
+security:
+  - BearerAuth: []
+
+tags:
+  - name: Auth
+    description: Authentication and OAuth flows
+  - name: Jobs
+    description: EPUB conversion job lifecycles
+  - name: Upload
+    description: Cloud storage upload endpoints
+  - name: Me
+    description: Authenticated user profile and dashboard
+  - name: Intentions
+    description: Purchase intention tracking
+  - name: System
+    description: Health and utility endpoints
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT Bearer token (HS256, 60min expiry). Obtain via `/auth/login` or OAuth callback.
+
+  schemas:
+    HealthResponse:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          examples: ["ok"]
+
+    ErrorResponse:
+      type: object
+      required: [detail]
+      properties:
+        detail:
+          type: string
+          description: Human-readable error message
+
+    User:
+      type: object
+      required:
+        - id
+        - email
+        - plan
+        - credits
+        - is_beta_tester
+        - is_active
+        - is_company
+        - connected_providers
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          examples: ["550e8400-e29b-41d4-a716-446655440000"]
+        email:
+          type: string
+          format: email
+        name:
+          anyOf:
+            - type: string
+            - type: "null"
+          examples: ["Jane Doe"]
+        plan:
+          type: string
+          enum: [free, pro]
+          examples: ["free"]
+        credits:
+          type: integer
+          minimum: 0
+        is_beta_tester:
+          type: boolean
+        is_active:
+          type: boolean
+        is_company:
+          type: boolean
+        country:
+          anyOf:
+            - type: string
+            - type: "null"
+        vat_number:
+          anyOf:
+            - type: string
+            - type: "null"
+        connected_providers:
+          type: array
+          items:
+            type: string
+            enum: [google_drive, dropbox, onedrive]
+        created_at:
+          type: string
+          format: date-time
+
+    RegisterRequest:
+      type: object
+      required: [email, password, name]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 1
+        name:
+          type: string
+        is_company:
+          type: boolean
+          default: false
+        country:
+          anyOf:
+            - type: string
+            - type: "null"
+        vat_number:
+          anyOf:
+            - type: string
+            - type: "null"
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+
+    LoginResponse:
+      type: object
+      required: [access_token, token_type]
+      properties:
+        access_token:
+          type: string
+          description: JWT Bearer token (HS256, 60min expiry)
+        token_type:
+          type: string
+          enum: [bearer]
+
+    RegisterResponse:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+          examples: ["Registration successful. Please check your email to verify your account."]
+
+    AuthUrlResponse:
+      type: object
+      required: [auth_url]
+      properties:
+        auth_url:
+          type: string
+          format: uri
+
+    OAuthCallbackResponse:
+      description: Redirects to the frontend with token. Not a JSON response.
+
+    VerifyResponse:
+      type: object
+      required: [message, access_token, token_type]
+      properties:
+        message:
+          type: string
+        access_token:
+          type: string
+        token_type:
+          type: string
+          enum: [bearer]
+
+    ForgotPasswordRequest:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+
+    ForgotPasswordResponse:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+
+    ResetPasswordRequest:
+      type: object
+      required: [token, new_password]
+      properties:
+        token:
+          type: string
+        new_password:
+          type: string
+
+    ResetPasswordResponse:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+
+    ResendVerificationResponse:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+
+    Job:
+      type: object
+      required:
+        - id
+        - source_url
+        - status
+        - progress
+        - created_at
+        - external_uploads
+      properties:
+        id:
+          type: string
+          format: uuid
+        source_url:
+          type: string
+          format: uri
+        status:
+          type: string
+          enum: [queued, processing, done, failed]
+          description: |
+            queued — waiting in queue.
+            processing — arq worker is executing the pipeline (extract, normalize, epub, upload).
+            done — EPUB generated and stored, ready for download.
+            failed — pipeline error.
+        progress:
+          type: integer
+          minimum: 0
+          maximum: 100
+        created_at:
+          type: string
+          format: date-time
+        external_uploads:
+          type: object
+          description: "Map of provider to upload result, e.g. {\"google_drive\": {\"id\": \"...\", \"url\": \"...\"}}"
+
+    CreateJobRequest:
+      type: object
+      required: [url]
+      properties:
+        url:
+          type: string
+          format: uri
+          description: A single article URL to convert
+
+    CreateCompositeJobRequest:
+      type: object
+      required: [urls, title]
+      properties:
+        urls:
+          type: array
+          minItems: 2
+          maxItems: 20
+          items:
+            type: string
+            format: uri
+        title:
+          type: string
+          minLength: 1
+
+    JobListResponse:
+      type: object
+      required: [jobs, total, page, per_page, pages]
+      properties:
+        jobs:
+          type: array
+          items:
+            $ref: "#/components/schemas/Job"
+        total:
+          type: integer
+        page:
+          type: integer
+        per_page:
+          type: integer
+        pages:
+          type: integer
+
+    DownloadResponse:
+      type: object
+      required: [download_url]
+      properties:
+        download_url:
+          type: string
+          format: uri
+          description: Presigned B2 URL for EPUB download (expires after 1 hour)
+
+    UploadRequest:
+      type: object
+      required: [provider]
+      properties:
+        provider:
+          type: string
+          enum: [google_drive, dropbox, onedrive, all]
+          description: "Target cloud provider. Use 'all' to upload to every connected provider."
+
+    UploadResult:
+      type: object
+      required: [success, errors]
+      properties:
+        success:
+          type: object
+          description: Map of provider to upload result metadata
+        errors:
+          type: array
+          items:
+            type: string
+          description: List of error messages per failed provider
+
+    UserUpdateRequest:
+      type: object
+      properties:
+        is_company:
+          type: boolean
+        country:
+          type: string
+        vat_number:
+          type: string
+
+    UserUsage:
+      type: object
+      required: [plan, credits, is_beta_tester]
+      properties:
+        plan:
+          type: string
+          enum: [free, pro]
+        credits:
+          type: integer
+        is_beta_tester:
+          type: boolean
+
+    DashboardSummary:
+      type: object
+      required: [usage, recent_jobs, connected_providers]
+      properties:
+        usage:
+          $ref: "#/components/schemas/UserUsage"
+        recent_jobs:
+          type: array
+          items:
+            $ref: "#/components/schemas/Job"
+        connected_providers:
+          type: array
+          items:
+            type: string
+            enum: [google_drive, dropbox, onedrive]
+
+    CreateIntentionRequest:
+      type: object
+      required: [tier_requested]
+      properties:
+        tier_requested:
+          type: string
+          description: ID of the plan/tier the user intends to purchase
+          examples: ["pro_yearly"]
+
+    IntentionResponse:
+      type: object
+      required: [id, user_id, tier_requested, clicked_at, reward_granted]
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        tier_requested:
+          type: string
+        clicked_at:
+          type: string
+          format: date-time
+        reward_granted:
+          type: boolean
+          description: Whether the 5-credit reward was awarded (false if already previously captured)
+
+    MessageResponse:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Unauthorized:
+      description: Missing or invalid JWT
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Forbidden:
+      description: Email not verified (login blocked)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    ValidationError:
+      description: Request validation failed
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    RateLimited:
+      description: Too many requests
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    InternalError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+paths:
+  /:
+    get:
+      tags: [System]
+      operationId: healthCheck
+      summary: Health check
+      description: Returns service status.
+      security: []
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+
+  /auth/google:
+    get:
+      tags: [Auth]
+      operationId: googleLoginInit
+      summary: Initiate Google OAuth login
+      description: Returns a Google OAuth authorization URL. Does not require prior authentication.
+      security: []
+      responses:
+        "200":
+          description: Authorization URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthUrlResponse"
+
+  /auth/google/authorize:
+    get:
+      tags: [Auth]
+      operationId: googleAuthorizeConnect
+      summary: Connect Google Drive for authenticated user
+      description: Returns a Google OAuth URL that also requests Drive scope for an already-authenticated user.
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Authorization URL (Drive scope)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthUrlResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /auth/google/callback:
+    get:
+      tags: [Auth]
+      operationId: googleOAuthCallback
+      summary: Google OAuth callback
+      description: Handles the redirect from Google. Resolves or creates the user and redirects to the frontend with a JWT token.
+      security: []
+      parameters:
+        - name: code
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: state
+          in: query
+          required: false
+          schema:
+            type: string
+          description: JWT of existing user when connecting Google Drive
+      responses:
+        "302":
+          description: Redirect to frontend
+          headers:
+            Location:
+              schema:
+                type: string
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /auth/register:
+    post:
+      tags: [Auth]
+      operationId: register
+      summary: Register a new user
+      description: Creates a new account and sends a verification email. Rate limited to 5/min.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+      responses:
+        "200":
+          description: Registration successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RegisterResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      operationId: login
+      summary: Log in with email and password
+      description: Returns a JWT access token. Rate limited to 10/min.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+
+  /auth/verify:
+    post:
+      tags: [Auth]
+      operationId: verifyEmail
+      summary: Verify email address
+      description: Marks the user's email as verified and returns a refreshed JWT.
+      security: []
+      parameters:
+        - name: token
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Verification token (JWT from the verification email)
+      responses:
+        "200":
+          description: Email verified
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VerifyResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /auth/resend-verification:
+    post:
+      tags: [Auth]
+      operationId: resendVerification
+      summary: Resend verification email
+      description: Re-sends the verification email if the account exists and is not yet verified. Rate limited to 3/min.
+      security: []
+      parameters:
+        - name: email
+          in: query
+          required: true
+          schema:
+            type: string
+            format: email
+      responses:
+        "200":
+          description: Verification email sent (ambiguous response for security)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResendVerificationResponse"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+
+  /auth/forgot-password:
+    post:
+      tags: [Auth]
+      operationId: forgotPassword
+      summary: Request password reset
+      description: Sends a password reset email if the account exists. Ambiguous response for security. Rate limited to 3/min.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ForgotPasswordRequest"
+      responses:
+        "200":
+          description: Reset email sent (ambiguous)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ForgotPasswordResponse"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+
+  /auth/reset-password:
+    post:
+      tags: [Auth]
+      operationId: resetPassword
+      summary: Reset password with token
+      description: Sets a new password using the reset token from the email.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResetPasswordRequest"
+      responses:
+        "200":
+          description: Password updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResetPasswordResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  /auth/dropbox/authorize:
+    get:
+      tags: [Auth]
+      operationId: dropboxAuthorize
+      summary: Initiate Dropbox OAuth connection
+      description: Returns a Dropbox OAuth authorization URL. Requires authentication.
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Dropbox authorization URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthUrlResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /auth/dropbox/callback:
+    get:
+      tags: [Auth]
+      operationId: dropboxOAuthCallback
+      summary: Dropbox OAuth callback
+      description: Handles Dropbox redirect, stores cloud connection, redirects to frontend.
+      security: []
+      parameters:
+        - name: code
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: state
+          in: query
+          required: true
+          schema:
+            type: string
+          description: JWT of the authenticated user
+      responses:
+        "302":
+          description: Redirect to /dashboard/account
+
+  /auth/onedrive/authorize:
+    get:
+      tags: [Auth]
+      operationId: onedriveAuthorize
+      summary: Initiate OneDrive OAuth connection
+      description: Returns a Microsoft OneDrive OAuth authorization URL. Requires authentication.
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: OneDrive authorization URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthUrlResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /auth/onedrive/callback:
+    get:
+      tags: [Auth]
+      operationId: onedriveOAuthCallback
+      summary: OneDrive OAuth callback
+      description: Handles OneDrive redirect, stores cloud connection, redirects to frontend.
+      security: []
+      parameters:
+        - name: code
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: state
+          in: query
+          required: true
+          schema:
+            type: string
+          description: JWT of the authenticated user
+      responses:
+        "302":
+          description: Redirect to /dashboard/account
+
+  /jobs:
+    post:
+      tags: [Jobs]
+      operationId: createJob
+      summary: Create a single-URL conversion job
+      description: Enqueues a URL for EPUB conversion. Deducts 1 credit. Rate limited to 10/min.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateJobRequest"
+      responses:
+        "202":
+          description: Job accepted and enqueued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Job"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "402":
+          description: Insufficient credits
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Duplicate URL (same URL already queued/processing within 10 min)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+
+    get:
+      tags: [Jobs]
+      operationId: listJobs
+      summary: List user's jobs
+      description: Returns paginated list of jobs ordered by most recent first.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        "200":
+          description: Paginated job list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /jobs/composite:
+    post:
+      tags: [Jobs]
+      operationId: createCompositeJob
+      summary: Create a multi-URL composite job
+      description: "Combines multiple URLs into a single EPUB. Deducts 1 credit. Rate limited to 10/min. Max URLs: 4 for free, 10 for pro."
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCompositeJobRequest"
+      responses:
+        "202":
+          description: Composite job accepted and enqueued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Job"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "402":
+          description: Insufficient credits
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+
+  /jobs/{job_id}:
+    get:
+      tags: [Jobs]
+      operationId: getJob
+      summary: Get job status
+      description: Returns the current status and metadata of a job.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Job details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Job"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /jobs/{job_id}/download:
+    get:
+      tags: [Jobs]
+      operationId: downloadEpub
+      summary: Get presigned download URL
+      description: Returns a presigned URL for downloading the generated EPUB. URL expires after 1 hour.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Presigned download URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DownloadResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /jobs/{job_id}/upload:
+    post:
+      tags: [Upload]
+      operationId: uploadJobToCloud
+      summary: Upload EPUB to cloud storage
+      description: Uploads the generated EPUB to the specified cloud provider (or all connected providers).
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UploadRequest"
+      responses:
+        "200":
+          description: Upload results per provider
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UploadResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  /me:
+    get:
+      tags: [Me]
+      operationId: getProfile
+      summary: Get current user profile
+      description: Returns the authenticated user's profile including connected cloud providers.
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: User profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+    put:
+      tags: [Me]
+      operationId: updateProfile
+      summary: Update user profile
+      description: Updates mutable profile fields (is_company, country, vat_number). All fields are optional.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserUpdateRequest"
+      responses:
+        "200":
+          description: Updated user profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  /me/usage:
+    get:
+      tags: [Me]
+      operationId: getUsage
+      summary: Get usage statistics
+      description: Returns current plan, credits, and beta tester status.
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Usage summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserUsage"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /me/dashboard:
+    get:
+      tags: [Me]
+      operationId: getDashboard
+      summary: Get dashboard summary
+      description: Returns usage stats, 5 most recent jobs, and connected cloud providers.
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /intentions:
+    post:
+      tags: [Intentions]
+      operationId: captureIntention
+      summary: Record a purchase intention
+      description: Captures a user's intent to purchase a plan. Awards 5 credits on first capture for a given tier.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateIntentionRequest"
+      responses:
+        "200":
+          description: Intention recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IntentionResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/ValidationError"
