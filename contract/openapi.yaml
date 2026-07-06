@@ -46,9 +46,9 @@ components:
 
     ErrorResponse:
       type: object
-      required: [detail]
+      required: [message]
       properties:
-        detail:
+        message:
           type: string
           description: Human-readable error message
 
@@ -236,7 +236,7 @@ components:
           format: uuid
         source_url:
           type: string
-          format: uri
+          description: "Article URL for single jobs, or 'composite:{title}' for composite jobs"
         status:
           type: string
           enum: [queued, processing, done, failed]
@@ -271,8 +271,9 @@ components:
       properties:
         urls:
           type: array
-          minItems: 2
-          maxItems: 20
+          minItems: 1
+          maxItems: 10
+          description: "1-10 URLs depending on plan (max 4 for free, 10 for pro)"
           items:
             type: string
             format: uri
@@ -394,12 +395,6 @@ components:
           type: boolean
           description: Whether the 5-credit reward was awarded (false if already previously captured)
 
-    MessageResponse:
-      type: object
-      required: [message]
-      properties:
-        message:
-          type: string
 
   responses:
     BadRequest:
@@ -839,7 +834,7 @@ paths:
       tags: [Jobs]
       operationId: createCompositeJob
       summary: Create a multi-URL composite job
-      description: "Combines multiple URLs into a single EPUB. Deducts 1 credit. Rate limited to 10/min. Max URLs: 4 for free, 10 for pro."
+      description: "Combines 1-10 URLs into a single EPUB. Deducts 1 credit. Rate limited to 10/min. Max URLs depends on plan (4 for free, 10 for pro)."
       security:
         - BearerAuth: []
       requestBody:

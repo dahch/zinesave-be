@@ -82,7 +82,7 @@ queued → processing → done
 | Schema | Fields | Used In |
 |--------|--------|---------|
 | `HealthResponse` | `status: string` | `GET /` |
-| `ErrorResponse` | `detail: string` | All error responses |
+| `ErrorResponse` | `message: string` | All error responses |
 | `User` | `id, email, name?, plan, credits, is_beta_tester, is_active, is_company, country?, vat_number?, connected_providers[], created_at` | `GET/PUT /me` |
 | `RegisterRequest` | `email, password, name, is_company?, country?, vat_number?` | `POST /auth/register` |
 | `RegisterResponse` | `message: string` | `POST /auth/register` |
@@ -94,9 +94,9 @@ queued → processing → done
 | `ResetPasswordRequest` | `token, new_password` | `POST /auth/reset-password` |
 | `ResetPasswordResponse` | `message` | `POST /auth/reset-password` |
 | `AuthUrlResponse` | `auth_url: uri` | Google/Dropbox/OneDrive authorize |
-| `Job` | `id, source_url, status (queued|processing|done|failed), progress (0-100), created_at, external_uploads: object` | `POST /jobs`, `GET /jobs/{id}`, `GET /jobs`, dashboard |
+| `Job` | `id, source_url (URL or "composite:{title}"), status (queued|processing|done|failed), progress (0-100), created_at, external_uploads: object` | `POST /jobs`, `GET /jobs/{id}`, `GET /jobs`, dashboard |
 | `CreateJobRequest` | `url: uri` | `POST /jobs` |
-| `CreateCompositeJobRequest` | `urls: uri[] (2-20), title: string` | `POST /jobs/composite` |
+| `CreateCompositeJobRequest` | `urls: uri[] (1-10, plan-dependent), title: string` | `POST /jobs/composite` |
 | `JobListResponse` | `jobs: Job[], total, page, per_page, pages` | `GET /jobs` |
 | `DownloadResponse` | `download_url: uri` | `GET /jobs/{id}/download` |
 | `UploadRequest` | `provider: google_drive\|dropbox\|onedrive\|all` | `POST /jobs/{id}/upload` |
@@ -147,7 +147,7 @@ queued → processing → done
 | `429` | Rate limit exceeded | Show "Too many requests, please wait" with retry-after hint if available. |
 | `500` | Internal server error | Show generic "Something went wrong" message. Log to error tracking. |
 
-All errors follow the structure: `{"detail": "string"}`. Validate this shape with Zod before displaying.
+All business errors follow the structure: `{"message": "string"}`. Validate this shape with Zod before displaying. Auth errors (401) and rate-limit errors may return `{"detail": "..."}`.
 
 ---
 
@@ -175,7 +175,7 @@ export const UserSchema = z.object({
 // Job
 export const JobSchema = z.object({
   id: z.string().uuid(),
-  source_url: z.string().url(),
+  source_url: z.string(), // URL for single jobs, "composite:{title}" for composite
   status: z.enum(["queued", "processing", "done", "failed"]),
   progress: z.number().int().min(0).max(100),
   created_at: z.string().datetime(),
@@ -233,7 +233,7 @@ export const IntentionResponseSchema = z.object({
 
 // ErrorResponse (universal error shape)
 export const ErrorResponseSchema = z.object({
-  detail: z.string(),
+  message: z.string(),
 });
 ```
 
@@ -247,7 +247,7 @@ export const CreateJobRequestSchema = z.object({
 **CreateCompositeJobRequest (FE → BE):**
 ```typescript
 export const CreateCompositeJobRequestSchema = z.object({
-  urls: z.array(z.string().url()).min(2).max(20),
+  urls: z.array(z.string().url()).min(1).max(10), // plan-dependent: max 4 (free), 10 (pro)
   title: z.string().min(1),
 });
 ```
@@ -336,4 +336,15 @@ class IntentionResponse(BaseModel):
 class UploadRequest(BaseModel):
     provider: str  # google_drive | dropbox | onedrive | all
 ```
+
+---
+
+## Changelog
+
+### 2026-07-06
+- [CHANGED] `ErrorResponse`: field renamed `detail` → `message` to match actual DomainException handler output
+- [CHANGED] `Job.source_url`: removed `format: uri` (composite jobs store `"composite:{title}"`), added description
+- [CHANGED] `CreateCompositeJobRequest.urls`: `minItems` 2→1, `maxItems` 20→10, added description about plan-dependent limits
+- [CHANGED] `/jobs/composite` endpoint description: clarified URL range 1-10, plan-dependent
+- [REMOVED] `MessageResponse` schema: unreferenced in code, removed to match source
 
