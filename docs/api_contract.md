@@ -115,7 +115,7 @@ Registro con email y password.
 
 Verifica el email de un usuario mediante token JWT.
 
-**Body param:** `token` (string)
+**Query param:** `token` (string)
 
 **Response 200**
 ```json
@@ -134,7 +134,7 @@ Verifica el email de un usuario mediante token JWT.
 
 Reenvía el email de verificación.
 
-**Body param:** `email` (string)
+**Query param:** `email` (string)
 
 **Response 200**
 ```json
