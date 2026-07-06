@@ -59,16 +59,16 @@ Antes de tecnología, 5 reglas que vamos a seguir:
 ### Stack
 
 - **FastAPI**
-- **Python 3.12**
+- **Python 3.11**
 - **Uvicorn**
 - **Pydantic v2 / Pydantic-Settings**
 
 ### Responsabilidades
 
-- Auth (Google OAuth, JWT, Magic Links)
-- Rate limiting (`slowapi`)
+- Auth (Google OAuth, Dropbox OAuth, OneDrive OAuth, JWT)
+- Rate limiting (`slowapi`, in-memory, sin Redis)
 - API pública
-- Gestión de créditos (Intentions)
+- Gestión de créditos e intenciones de compra (Intentions)
 - Encolamiento de jobs (vía `QueueService`)
 
 📌 La capa de rutas (`app/api/routes/`) no toca la base de datos directamente, todo se inyecta.
@@ -127,14 +127,15 @@ Datos:
 
 ### Implementado
 
-- Email + Password (JWT)
-- OAuth Google (Sincroniza Drive)
-- Dropbox / OneDrive OAuth
-- Verificación de email y Reset de contraseña.
+- Email + Password (JWT, con verificación de email)
+- Google OAuth (login y bind de Google Drive)
+- Dropbox / OneDrive OAuth (bind para exportación)
+- Forgot / Reset de contraseña
+- Welcome email para usuarios OAuth
 
 Librerías:
 - `passlib` (Argon2)
-- `python-jose` (JWT)
+- `PyJWT` (JWT)
 - `google-auth-oauthlib`
 
 ---
@@ -149,39 +150,58 @@ Librerías:
 ## 7️⃣ API pública
 
 ```
-POST   /jobs
-GET    /jobs/{id}
-GET    /jobs
-GET    /upload/download/{file_id}
-POST   /me/intentions (Compra de créditos)
+POST   /jobs                     (Crear job simple)
+POST   /jobs/composite           (Crear job compuesto multi-URL)
+GET    /jobs                     (Listar jobs, paginado: ?page=1&per_page=20)
+GET    /jobs/{id}                (Estado del job)
+GET    /jobs/{id}/download       (Presigned URL de descarga)
+POST   /jobs/{id}/upload         (Subir a cloud manualmente)
+GET    /me                       (Perfil del usuario)
+PUT    /me                       (Actualizar perfil)
+GET    /me/usage                 (Uso y créditos)
+GET    /me/dashboard             (Dashboard completo)
+POST   /intentions               (Capturar intención de compra)
 ```
 
 Estados de un Job:
-- `pending`
-- `processing`
-- `completed`
-- `failed`
+- `queued` — creado, esperando worker
+- `processing` — pipeline en ejecución
+- `done` — completado
+- `failed` — error en el procesamiento
 
 ---
 
 ## 8️⃣ Observabilidad y Logs
 
 - **JSON Logging estructurado:** Implementado en `app/core/logging.py` para compatibilidad máxima con Datadog o Elastic.
-- **Sentry SDK:** Integrado para capturar excepciones del dominio y errores de servidor no controlados.
+- **Sentry SDK:** Integrado en API y Worker para capturar excepciones del dominio y errores de servidor no controlados.
 
 ---
 
 ## 9️⃣ Infraestructura
 
-- Base de datos relacional (PostgreSQL)
-- Servidor caché y colas (Redis)
-- Storage (Backblaze B2)
-- Worker (Python Arq)
-- API (FastAPI)
+- **API:** FastAPI + Uvicorn
+- **Worker:** Arq (procesamiento asíncrono de conversiones)
+- **Cola:** Redis
+- **Base de datos:** PostgreSQL
+- **Storage:** Backblaze B2 (S3-compatible)
+- **Email:** MailerSend (verificación, reset password, welcome)
+- **Monitoreo:** Sentry
+- **Despliegue:** Fly.io (app `zinesave-be`, región `ams`), CI/CD con GitHub Actions
+
+El `fly.toml` define dos procesos:
+- `app`: `uvicorn app.main:app --host 0.0.0.0 --port 8080`
+- `worker`: `arq app.worker.WorkerSettings`
 
 ---
 
-## 10️⃣ Seguridad
+## 10️⃣ Retención Automática
+
+El worker ejecuta un cron job diario (03:00 UTC) que elimina archivos EPUB de usuarios en plan free con más de 7 días de antigüedad. Implementado en `app/services/retention_service.py`.
+
+---
+
+## 11️⃣ Seguridad
 
 - Limitación de tasa de solicitudes (Rate Limiting)
 - SSRF Protection: Las URLs a procesar se validan internamente bloqueando rangos IP locales y meta-endpoints (AWS/GCP metadata).
